@@ -50,6 +50,7 @@ type ShopifyConfig = {
   store_domain: string;
   api_version: string;
   has_access_token: boolean;
+  has_client_credentials: boolean;
 };
 
 type GelatoConfig = {
@@ -73,6 +74,9 @@ export default function SettingsPage() {
   const [shopifyApiVersion, setShopifyApiVersion] = useState("2024-10");
   const [shopifyAccessToken, setShopifyAccessToken] = useState("");
   const [shopifyHasToken, setShopifyHasToken] = useState(false);
+  const [shopifyClientId, setShopifyClientId] = useState("");
+  const [shopifyClientSecret, setShopifyClientSecret] = useState("");
+  const [shopifyHasClientCredentials, setShopifyHasClientCredentials] = useState(false);
   const [shopifyBusy, setShopifyBusy] = useState(false);
   const [shopifyTestStatus, setShopifyTestStatus] = useState("");
   const [testShopifyBusy, setTestShopifyBusy] = useState(false);
@@ -179,6 +183,7 @@ export default function SettingsPage() {
       setShopifyDomain(row.store_domain || "");
       setShopifyApiVersion(row.api_version || "2024-10");
       setShopifyHasToken(Boolean(row.has_access_token));
+      setShopifyHasClientCredentials(Boolean(row.has_client_credentials));
     } catch {
       // keep section optional if route not yet available
     }
@@ -200,12 +205,24 @@ export default function SettingsPage() {
     setShopifyBusy(true);
     setStatus("");
     try {
-      const payload: { store_domain: string; api_version: string; access_token?: string } = {
+      const payload: {
+        store_domain: string;
+        api_version: string;
+        access_token?: string;
+        client_id?: string;
+        client_secret?: string;
+      } = {
         store_domain: shopifyDomain,
         api_version: shopifyApiVersion,
       };
       if (shopifyAccessToken.trim()) {
         payload.access_token = shopifyAccessToken.trim();
+      }
+      if (shopifyClientId.trim()) {
+        payload.client_id = shopifyClientId.trim();
+      }
+      if (shopifyClientSecret.trim()) {
+        payload.client_secret = shopifyClientSecret.trim();
       }
 
       const result = await api<{ message: string }>("/shopify/config", {
@@ -214,6 +231,7 @@ export default function SettingsPage() {
       });
       setStatus(result.message);
       setShopifyAccessToken("");
+      setShopifyClientSecret("");
       await loadShopifyConfig();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to save Shopify config");
@@ -435,6 +453,9 @@ export default function SettingsPage() {
             Access token: Shopify Admin → Apps and sales channels → Develop apps → jouw app → Configuration (scope: read_orders)
             → Install app → API credentials → Admin API access token.
           </p>
+          <p className="mt-1 text-xs opacity-70">
+            Client ID/Secret kun je optioneel bewaren voor referentie, maar voor orders is altijd een Admin API access token nodig.
+          </p>
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <div>
@@ -470,6 +491,32 @@ export default function SettingsPage() {
             />
             {shopifyHasToken && <p className="mt-1 text-xs opacity-60">A token is already stored securely.</p>}
           </div>
+
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium">Client ID (optional)</label>
+              <input
+                type="text"
+                className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+                placeholder="Shopify app client id"
+                value={shopifyClientId}
+                onChange={(e) => setShopifyClientId(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Client Secret (optional)</label>
+              <input
+                type="password"
+                className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+                placeholder={shopifyHasClientCredentials ? "Already stored (leave empty to keep)" : "Shopify app client secret"}
+                value={shopifyClientSecret}
+                onChange={(e) => setShopifyClientSecret(e.target.value)}
+              />
+            </div>
+          </div>
+          {shopifyHasClientCredentials && (
+            <p className="mt-1 text-xs opacity-60">Client credentials are already stored securely.</p>
+          )}
 
           <div className="mt-4 flex gap-2">
             <button

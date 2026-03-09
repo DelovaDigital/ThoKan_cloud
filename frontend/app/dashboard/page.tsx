@@ -49,6 +49,28 @@ type ShopifyOrderDetail = ShopifyOrder & {
   }>;
 };
 
+type GelatoOrderStatus = {
+  found: boolean;
+  shopify_order_id: string;
+  gelato_order_id?: string;
+  external_id?: string;
+  status?: string;
+  production_status?: string;
+  shipping_status?: string;
+  delivery_status?: string;
+  stage?: string;
+  stage_message?: string;
+  eta?: string;
+  created_at?: string;
+  updated_at?: string;
+  recipient_name?: string;
+  recipient_country?: string;
+  tracking_numbers?: string[];
+  tracking_urls?: string[];
+  carriers?: string[];
+  shipment_statuses?: string[];
+};
+
 function ProgressBar({ current, total, color = "bg-accent" }: { current: number; total: number; color?: string }) {
   const percent = total > 0 ? Math.min((current / total) * 100, 100) : 0;
   return (
@@ -75,6 +97,9 @@ export default function DashboardPage() {
   const [orderDetailError, setOrderDetailError] = useState("");
   const [sendGelatoBusy, setSendGelatoBusy] = useState(false);
   const [sendGelatoStatus, setSendGelatoStatus] = useState("");
+  const [gelatoStatus, setGelatoStatus] = useState<GelatoOrderStatus | null>(null);
+  const [gelatoStatusLoading, setGelatoStatusLoading] = useState(false);
+  const [gelatoStatusError, setGelatoStatusError] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -106,9 +131,12 @@ export default function DashboardPage() {
   async function openOrderDetail(orderId: string) {
     setOrderDetailLoading(true);
     setOrderDetailError("");
+    setGelatoStatus(null);
+    setGelatoStatusError("");
     try {
       const detail = await api<ShopifyOrderDetail>(`/shopify/orders/${orderId}`);
       setSelectedOrder(detail);
+      loadGelatoStatus(orderId);
     } catch (err) {
       setOrderDetailError(err instanceof Error ? err.message : "Failed to load order detail");
       setSelectedOrder(null);
@@ -116,14 +144,29 @@ export default function DashboardPage() {
     setOrderDetailLoading(false);
   }
 
+  async function loadGelatoStatus(orderId: string) {
+    setGelatoStatusLoading(true);
+    setGelatoStatusError("");
+    try {
+      const result = await api<GelatoOrderStatus>(`/gelato/orders/from-shopify/${orderId}/status`);
+      setGelatoStatus(result);
+    } catch (err) {
+      setGelatoStatus(null);
+      setGelatoStatusError(err instanceof Error ? err.message : "Failed to load Gelato status");
+    }
+    setGelatoStatusLoading(false);
+  }
+
   function closeOrderDetail() {
     setSelectedOrder(null);
     setOrderDetailError("");
     setSendGelatoStatus("");
+    setGelatoStatus(null);
+    setGelatoStatusError("");
   }
 
   async function sendOrderToGelato() {
-    if (!selectedOrder?.id) return;
+    if (!selectedOrder?.id || gelatoStatus?.found) return;
     setSendGelatoBusy(true);
     setSendGelatoStatus("");
     try {
@@ -136,6 +179,7 @@ export default function DashboardPage() {
       );
       const unmapped = result.unmapped_skus && result.unmapped_skus.length > 0 ? ` (unmapped SKUs: ${result.unmapped_skus.join(", ")})` : "";
       setSendGelatoStatus(`${result.message}${unmapped}`);
+      await loadGelatoStatus(selectedOrder.id);
     } catch (err) {
       setSendGelatoStatus(err instanceof Error ? err.message : "Failed to send order to Gelato");
     }
@@ -146,6 +190,8 @@ export default function DashboardPage() {
     ? (data.system_info.storage_used_gb / data.system_info.storage_total_gb) * 100
     : 0;
   const storageColor = storagePercent > 90 ? "bg-red-500" : storagePercent > 75 ? "bg-yellow-500" : "bg-green-500";
+  const hasGelatoOrder = Boolean(gelatoStatus?.found);
+  const sendToGelatoDisabled = orderDetailLoading || sendGelatoBusy || !selectedOrder || hasGelatoOrder;
 
   return (
     <LayoutShell>
@@ -305,10 +351,10 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={sendOrderToGelato}
-                    disabled={orderDetailLoading || sendGelatoBusy || !selectedOrder}
+                    disabled={sendToGelatoDisabled}
                     className="rounded-lg bg-accent px-3 py-1 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
                   >
-                    {sendGelatoBusy ? "Sending..." : "Send to Gelato"}
+                    {sendGelatoBusy ? "Sending..." : hasGelatoOrder ? "Already in Gelato" : "Send to Gelato"}
                   </button>
                   <button onClick={closeOrderDetail} className="rounded-lg border border-border px-3 py-1 text-sm hover:bg-card/70">
                     Close
@@ -426,6 +472,99 @@ export default function DashboardPage() {
                       </div>
                     ) : (
                       <p className="mt-1 font-medium">No line items</p>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-border bg-card/40 p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs opacity-60">Gelato Fulfillment</p>
+                      {selectedOrder?.id && (
+                        <button
+                          onClick={() => loadGelatoStatus(selectedOrder.id)}
+                          disabled={gelatoStatusLoading}
+                          className="rounded-lg border border-border px-2 py-1 text-xs transition hover:bg-card/70 disabled:opacity-50"
+                        >
+                          {gelatoStatusLoading ? "Refreshing..." : "Refresh Gelato"}
+                        </button>
+                      )}
+                    </div>
+
+                    {gelatoStatusLoading && <p className="mt-2 text-sm opacity-70">Loading Gelato status...</p>}
+                    {gelatoStatusError && <p className="mt-2 text-sm text-red-400">{gelatoStatusError}</p>}
+
+                    {!gelatoStatusLoading && !gelatoStatusError && gelatoStatus && !gelatoStatus.found && (
+                      <p className="mt-2 text-sm opacity-70">Nog geen Gelato order gevonden voor deze Shopify order.</p>
+                    )}
+
+                    {!gelatoStatusLoading && !gelatoStatusError && gelatoStatus?.found && (
+                      <div className="mt-3 space-y-3">
+                        <div className="rounded-xl border border-border bg-card/30 p-3">
+                          <p className="text-xs opacity-60">Current Stage</p>
+                          <p className="mt-1 font-medium">{gelatoStatus.stage || "-"}</p>
+                          {gelatoStatus.stage_message && <p className="mt-1 text-xs opacity-70">{gelatoStatus.stage_message}</p>}
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                          <div className="rounded-xl border border-border bg-card/30 p-3">
+                            <p className="text-xs opacity-60">Status</p>
+                            <p className="mt-1 font-medium">{gelatoStatus.status || "-"}</p>
+                          </div>
+                          <div className="rounded-xl border border-border bg-card/30 p-3">
+                            <p className="text-xs opacity-60">Production</p>
+                            <p className="mt-1 font-medium">{gelatoStatus.production_status || "-"}</p>
+                          </div>
+                          <div className="rounded-xl border border-border bg-card/30 p-3">
+                            <p className="text-xs opacity-60">Shipping</p>
+                            <p className="mt-1 font-medium">{gelatoStatus.shipping_status || gelatoStatus.delivery_status || "-"}</p>
+                          </div>
+                          <div className="rounded-xl border border-border bg-card/30 p-3">
+                            <p className="text-xs opacity-60">ETA</p>
+                            <p className="mt-1 font-medium">
+                              {gelatoStatus.eta ? new Date(gelatoStatus.eta).toLocaleString() : "-"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div className="rounded-xl border border-border bg-card/30 p-3">
+                            <p className="text-xs opacity-60">Gelato Order</p>
+                            <p className="mt-1 font-medium">{gelatoStatus.gelato_order_id || "-"}</p>
+                            <p className="mt-1 text-xs opacity-60">External: {gelatoStatus.external_id || "-"}</p>
+                          </div>
+                          <div className="rounded-xl border border-border bg-card/30 p-3">
+                            <p className="text-xs opacity-60">Recipient</p>
+                            <p className="mt-1 font-medium">{gelatoStatus.recipient_name || "-"}</p>
+                            <p className="mt-1 text-xs opacity-60">{gelatoStatus.recipient_country || "-"}</p>
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-border bg-card/30 p-3">
+                          <p className="text-xs opacity-60">Tracking</p>
+                          {gelatoStatus.tracking_urls && gelatoStatus.tracking_urls.length > 0 ? (
+                            <ul className="mt-2 space-y-1">
+                              {gelatoStatus.tracking_urls.map((url, index) => (
+                                <li key={`tracking-url-${index}`}>
+                                  <a className="text-sm text-accent hover:underline" href={url} target="_blank" rel="noreferrer">
+                                    Track shipment {index + 1}
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="mt-1 text-sm font-medium">Nog geen tracking beschikbaar.</p>
+                          )}
+
+                          {gelatoStatus.tracking_numbers && gelatoStatus.tracking_numbers.length > 0 && (
+                            <p className="mt-2 text-xs opacity-60">Tracking numbers: {gelatoStatus.tracking_numbers.join(", ")}</p>
+                          )}
+                          {gelatoStatus.carriers && gelatoStatus.carriers.length > 0 && (
+                            <p className="mt-1 text-xs opacity-60">Carrier(s): {gelatoStatus.carriers.join(", ")}</p>
+                          )}
+                          {gelatoStatus.shipment_statuses && gelatoStatus.shipment_statuses.length > 0 && (
+                            <p className="mt-1 text-xs opacity-60">Shipment status: {gelatoStatus.shipment_statuses.join(", ")}</p>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
 

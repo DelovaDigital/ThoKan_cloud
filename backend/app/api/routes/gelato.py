@@ -1,5 +1,6 @@
 import base64
 import re
+from datetime import datetime, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -80,6 +81,242 @@ def _gelato_request(raw: dict, method: str, path: str, params: dict | None = Non
     if not response.content:
         return {}
     return response.json()
+
+
+def _extract_gelato_order_id(payload: dict) -> str:
+    candidates = [
+        payload.get("id"),
+        payload.get("orderId"),
+        (payload.get("order") or {}).get("id") if isinstance(payload.get("order"), dict) else None,
+        (payload.get("data") or {}).get("id") if isinstance(payload.get("data"), dict) else None,
+    ]
+    for candidate in candidates:
+        value = str(candidate or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _extract_first_order(payload: dict) -> dict:
+    if isinstance(payload.get("order"), dict):
+        return payload["order"]
+    if isinstance(payload.get("data"), dict) and isinstance(payload["data"].get("order"), dict):
+        return payload["data"]["order"]
+
+    for key in ["orders", "data", "results", "items"]:
+        value = payload.get(key)
+        if isinstance(value, list) and value:
+            first = value[0]
+            if isinstance(first, dict):
+                return first
+        if isinstance(value, dict):
+            for nested_key in ["orders", "items", "results"]:
+                nested_value = value.get(nested_key)
+                if isinstance(nested_value, list) and nested_value:
+                    first = nested_value[0]
+                    if isinstance(first, dict):
+                        return first
+    return {}
+
+
+def _parse_list(value: object) -> list[dict]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    return []
+
+
+def _walk_values(value: object):
+    if isinstance(value, dict):
+        yield value
+        for nested in value.values():
+            yield from _walk_values(nested)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _walk_values(item)
+
+
+def _find_first_string(value: object, keys: list[str]) -> str:
+    key_set = {k.lower() for k in keys}
+    for node in _walk_values(value):
+        if not isinstance(node, dict):
+            continue
+        for key, candidate in node.items():
+            if str(key).lower() not in key_set:
+                continue
+            result = str(candidate or "").strip()
+            if result:
+                return result
+    return ""
+
+
+def _collect_strings(value: object, keys: list[str]) -> list[str]:
+    key_set = {k.lower() for k in keys}
+    collected: list[str] = []
+    seen: set[str] = set()
+    for node in _walk_values(value):
+        if not isinstance(node, dict):
+            continue
+        for key, candidate in node.items():
+            if str(key).lower() not in key_set:
+                continue
+            result = str(candidate or "").strip()
+            if result and result not in seen:
+                seen.add(result)
+                collected.append(result)
+    return collected
+
+
+def _normalize_gelato_status_payload(order_id: str, payload: dict) -> dict:
+    order = payload if payload.get("id") or payload.get("status") else _extract_first_order(payload)
+    if not order:
+        return {
+            "found": False,
+            "shopify_order_id": order_id,
+        }
+
+    shipment_list = _parse_list(order.get("shipments"))
+    if not shipment_list:
+        shipment_list = _parse_list((order.get("fulfillment") or {}).get("shipments") if isinstance(order.get("fulfillment"), dict) else [])
+    if not shipment_list:
+        shipment_list = _parse_list(order.get("deliveries"))
+    if not shipment_list:
+        shipment_list = _parse_list(order.get("parcels"))
+
+    tracking_numbers: list[str] = []
+    tracking_urls: list[str] = []
+    carriers: list[str] = []
+    last_mile_statuses: list[str] = []
+    for shipment in shipment_list:
+        tracking_number = str(shipment.get("trackingNumber") or shipment.get("tracking_number") or "").strip()
+        if tracking_number:
+            tracking_numbers.append(tracking_number)
+        tracking_url = str(shipment.get("trackingUrl") or shipment.get("tracking_url") or "").strip()
+        if tracking_url:
+            tracking_urls.append(tracking_url)
+        carrier = str(shipment.get("carrier") or shipment.get("shippingProvider") or "").strip()
+        if carrier:
+            carriers.append(carrier)
+        shipment_status = str(shipment.get("status") or "").strip()
+        if shipment_status:
+            last_mile_statuses.append(shipment_status)
+
+    if not tracking_numbers:
+        tracking_numbers = _collect_strings(order, ["trackingNumber", "tracking_number", "trackingNo"])
+    if not tracking_urls:
+        tracking_urls = _collect_strings(
+            order,
+            [
+                "trackingUrl",
+                "tracking_url",
+                "trackingLink",
+                "tracking_link",
+                "carrierTrackingUrl",
+                "carrier_tracking_url",
+            ],
+        )
+        tracking_urls = [url for url in tracking_urls if url.startswith("http://") or url.startswith("https://")]
+    if not carriers:
+        carriers = _collect_strings(order, ["carrier", "shippingProvider", "provider", "courier"])
+    if not last_mile_statuses:
+        last_mile_statuses = _collect_strings(order, ["shipmentStatus", "shippingStatus", "deliveryStatus", "status"])
+
+    recipient = order.get("recipient") if isinstance(order.get("recipient"), dict) else {}
+    first_name = str(recipient.get("firstName") or recipient.get("first_name") or "").strip()
+    last_name = str(recipient.get("lastName") or recipient.get("last_name") or "").strip()
+    recipient_name = " ".join(part for part in [first_name, last_name] if part).strip()
+    if not recipient_name:
+        recipient_name = _find_first_string(order, ["fullName", "name", "recipientName", "customerName"])
+
+    external_id = str(order.get("externalId") or order.get("external_id") or "").strip()
+    if not external_id:
+        external_id = _find_first_string(order, ["externalId", "external_id", "externalReferenceId", "externalReference"])
+
+    status_value = str(order.get("status") or order.get("orderStatus") or "").strip()
+    production_status = str(order.get("productionStatus") or order.get("production_status") or "").strip()
+    shipping_status = str(order.get("shippingStatus") or order.get("shipping_status") or order.get("fulfillmentStatus") or "").strip()
+    delivery_status = str(order.get("deliveryStatus") or order.get("delivery_status") or "").strip()
+    if not production_status:
+        production_status = _find_first_string(order, ["productionStatus", "production_status", "printStatus"])
+    if not shipping_status:
+        shipping_status = _find_first_string(order, ["shippingStatus", "shipping_status", "fulfillmentStatus"])
+    if not delivery_status:
+        delivery_status = _find_first_string(order, ["deliveryStatus", "delivery_status"])
+
+    stage = "processing"
+    lowered_blob = " ".join([status_value, production_status, shipping_status, delivery_status, " ".join(last_mile_statuses)]).lower()
+    if "delivered" in lowered_blob:
+        stage = "delivered"
+    elif tracking_numbers or tracking_urls or "shipped" in lowered_blob or "in_transit" in lowered_blob:
+        stage = "in_transit"
+    elif "production" in lowered_blob:
+        stage = "in_production"
+
+    stage_message = {
+        "processing": "Order is received by Gelato and waiting for fulfillment updates.",
+        "in_production": "Order is in production. Tracking appears after handover to shipping carrier.",
+        "in_transit": "Order has shipped and is on the way.",
+        "delivered": "Order is marked as delivered.",
+    }.get(stage, "Order status available.")
+
+    return {
+        "found": True,
+        "shopify_order_id": order_id,
+        "gelato_order_id": str(order.get("id") or order.get("orderId") or "").strip(),
+        "external_id": external_id,
+        "status": status_value,
+        "production_status": production_status,
+        "shipping_status": shipping_status,
+        "delivery_status": delivery_status,
+        "stage": stage,
+        "stage_message": stage_message,
+        "eta": str(order.get("estimatedDeliveryDate") or order.get("deliveryDate") or order.get("eta") or "").strip(),
+        "created_at": str(order.get("createdAt") or order.get("created") or "").strip(),
+        "updated_at": str(order.get("updatedAt") or order.get("lastUpdated") or "").strip(),
+        "recipient_name": recipient_name,
+        "recipient_country": str(((recipient.get("address") if isinstance(recipient.get("address"), dict) else {}) or {}).get("country") or _find_first_string(order, ["country", "countryCode", "country_code"])).strip(),
+        "tracking_numbers": tracking_numbers,
+        "tracking_urls": tracking_urls,
+        "carriers": carriers,
+        "shipment_statuses": last_mile_statuses,
+        "raw": order,
+    }
+
+
+def _get_or_discover_gelato_order(gelato_raw: dict, order_id: str) -> dict:
+    link_map = gelato_raw.get("shopify_order_links") if isinstance(gelato_raw.get("shopify_order_links"), dict) else {}
+    linked = link_map.get(order_id) if isinstance(link_map.get(order_id), dict) else {}
+    linked_gelato_id = str(linked.get("gelato_order_id") or "").strip()
+    external_id = f"shopify-{order_id}"
+
+    if linked_gelato_id:
+        detail_payload = _gelato_request(gelato_raw, "GET", f"orders/{linked_gelato_id}")
+        normalized = _normalize_gelato_status_payload(order_id, detail_payload)
+        if not normalized.get("external_id"):
+            normalized["external_id"] = str(linked.get("external_id") or "").strip()
+        if normalized.get("found"):
+            return normalized
+
+    for params in [
+        {"externalId": external_id, "limit": 1},
+        {"externalReferenceId": external_id, "limit": 1},
+    ]:
+        try:
+            list_payload = _gelato_request(gelato_raw, "GET", "orders", params=params)
+            order = _extract_first_order(list_payload)
+            if order:
+                normalized = _normalize_gelato_status_payload(order_id, order)
+                if not normalized.get("external_id"):
+                    normalized["external_id"] = str(linked.get("external_id") or "").strip()
+                if normalized.get("found"):
+                    return normalized
+        except HTTPException:
+            continue
+
+    return {
+        "found": False,
+        "shopify_order_id": order_id,
+        "external_id": external_id,
+    }
 
 
 def _shopify_order_for_user(db: Session, user_id: str, order_id: str) -> dict:
@@ -242,8 +479,47 @@ def gelato_create_from_shopify(order_id: str, current_user: User = Depends(get_c
     }
 
     response = _gelato_request(gelato_raw, "POST", "orders", payload=gelato_payload)
+    gelato_order_id = _extract_gelato_order_id(response)
+    link_map = gelato_raw.get("shopify_order_links") if isinstance(gelato_raw.get("shopify_order_links"), dict) else {}
+    updated_links = dict(link_map)
+    updated_links[order_id] = {
+        "gelato_order_id": gelato_order_id,
+        "external_id": f"shopify-{order.get('id')}",
+        "shopify_order_name": order.get("name") or "",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    updated_raw = dict(gelato_raw)
+    updated_raw["shopify_order_links"] = updated_links
+    _save_config(db, _gelato_key(user_id), user_id, updated_raw)
+
     return {
         "message": "Order sent to Gelato",
         "gelato_response": response,
+        "gelato_order_id": gelato_order_id,
         "unmapped_skus": missing_skus,
     }
+
+
+@router.get("/orders/from-shopify/{order_id}/status")
+def gelato_status_from_shopify(order_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    user_id = str(current_user.id)
+    gelato_raw = _get_raw_config(db, _gelato_key(user_id))
+    if not gelato_raw:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gelato config not found")
+
+    normalized = _get_or_discover_gelato_order(gelato_raw, order_id)
+    if normalized.get("found"):
+        gelato_order_id = str(normalized.get("gelato_order_id") or "").strip()
+        if gelato_order_id:
+            link_map = gelato_raw.get("shopify_order_links") if isinstance(gelato_raw.get("shopify_order_links"), dict) else {}
+            updated_links = dict(link_map)
+            updated_links[order_id] = {
+                "gelato_order_id": gelato_order_id,
+                "external_id": str(normalized.get("external_id") or "").strip(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            updated_raw = dict(gelato_raw)
+            updated_raw["shopify_order_links"] = updated_links
+            _save_config(db, _gelato_key(user_id), user_id, updated_raw)
+
+    return normalized

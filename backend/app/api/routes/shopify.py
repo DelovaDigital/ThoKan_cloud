@@ -64,10 +64,43 @@ def _decrypted_token(raw: dict) -> str:
     return decrypt_bytes(encrypted, iv).decode("utf-8")
 
 
-def _shopify_request(raw: dict, path: str, params: dict | None = None) -> dict:
+def _decrypted_secret(raw: dict, value_key: str, iv_key: str) -> str:
+    encrypted_b64 = raw.get(value_key)
+    iv = raw.get(iv_key)
+    if not encrypted_b64 or not iv:
+        return ""
+    encrypted = base64.b64decode(encrypted_b64.encode("utf-8"))
+    return decrypt_bytes(encrypted, iv).decode("utf-8")
+
+
+def _encrypt_secret(value: str) -> tuple[str, str]:
+    encrypted, iv = encrypt_bytes(value.encode("utf-8"))
+    return base64.b64encode(encrypted).decode("utf-8"), iv
+
+
+def _resolve_access_token(db: Session, user_id: str, raw: dict, store_domain: str) -> str:
+    existing_token = _normalize_access_token(_decrypted_token(raw))
+    if existing_token:
+        return existing_token
+
+    has_client_id = bool((raw.get("client_id") or "").strip())
+    has_client_secret = bool(raw.get("client_secret_enc") and raw.get("client_secret_iv"))
+    if has_client_id or has_client_secret:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Shopify Admin API orders require an Admin API access token (shpat_...). "
+                "Client ID/Secret alone cannot fetch orders. Generate/install your app token and save it in Settings."
+            ),
+        )
+
+    return ""
+
+
+def _shopify_request(db: Session, user_id: str, raw: dict, path: str, params: dict | None = None) -> dict:
     store_domain = _normalize_store_domain(raw.get("store_domain") or "")
     api_version = raw.get("api_version") or "2024-10"
-    access_token = _normalize_access_token(_decrypted_token(raw))
+    access_token = _resolve_access_token(db, user_id, raw, store_domain)
 
     if not store_domain or not access_token:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incomplete Shopify configuration")
@@ -114,6 +147,7 @@ def get_shopify_config(current_user: User = Depends(get_current_user), db: Sessi
         "store_domain": raw.get("store_domain", ""),
         "api_version": raw.get("api_version", "2024-10"),
         "has_access_token": bool(raw.get("access_token_enc") and raw.get("access_token_iv")),
+        "has_client_credentials": bool(raw.get("client_id") and raw.get("client_secret_enc") and raw.get("client_secret_iv")),
     }
 
 
@@ -123,6 +157,8 @@ def save_shopify_config(payload: dict, current_user: User = Depends(get_current_
     store_domain = _normalize_store_domain(payload.get("store_domain") or raw.get("store_domain") or "")
     api_version = (payload.get("api_version") or raw.get("api_version") or "2024-10").strip()
     access_token = _normalize_access_token(payload.get("access_token") or "")
+    client_id = (payload.get("client_id") or raw.get("client_id") or "").strip()
+    client_secret = (payload.get("client_secret") or "").strip()
 
     if not store_domain:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="store_domain is required")
@@ -131,27 +167,43 @@ def save_shopify_config(payload: dict, current_user: User = Depends(get_current_
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="store_domain must end with .myshopify.com",
         )
-    if access_token and not re.match(r"^shp[a-z]+_", access_token):
+    if access_token and not access_token.startswith("shpat_"):
+        token_prefix = access_token.split("_", 1)[0].lower() if "_" in access_token else ""
+        if token_prefix in {"shpss", "shpsk", "shpca", "shpua"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Invalid access_token type. You entered app credentials/secret. "
+                    "Paste the Shopify Admin API access token (starts with shpat_) from your installed app."
+                ),
+            )
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "access_token appears invalid. Paste the Shopify Admin API access token "
-                "(usually starts with shp..._), not API key/secret."
-            ),
+            detail="access_token appears invalid. Paste a Shopify Admin API access token that starts with shpat_.",
         )
 
     access_token_enc = raw.get("access_token_enc")
     access_token_iv = raw.get("access_token_iv")
+    access_token_expires_at = raw.get("access_token_expires_at")
     if access_token:
-        encrypted, iv = encrypt_bytes(access_token.encode("utf-8"))
-        access_token_enc = base64.b64encode(encrypted).decode("utf-8")
-        access_token_iv = iv
+        access_token_enc, access_token_iv = _encrypt_secret(access_token)
+        access_token_expires_at = None
+
+    client_secret_enc = raw.get("client_secret_enc")
+    client_secret_iv = raw.get("client_secret_iv")
+    if client_secret:
+        client_secret_enc, client_secret_iv = _encrypt_secret(client_secret)
 
     data = {
         "store_domain": store_domain,
         "api_version": api_version,
         "access_token_enc": access_token_enc,
         "access_token_iv": access_token_iv,
+        "access_token_expires_at": access_token_expires_at,
+        "client_id": client_id,
+        "client_secret_enc": client_secret_enc,
+        "client_secret_iv": client_secret_iv,
     }
     _save_config(db, str(current_user.id), data)
     return {"message": "Shopify configuration saved"}
@@ -164,7 +216,7 @@ def test_shopify_connection(current_user: User = Depends(get_current_user), db: 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shopify config not found")
 
     try:
-        payload = _shopify_request(raw, "orders.json", params={"status": "any", "limit": 1})
+        payload = _shopify_request(db, str(current_user.id), raw, "orders.json", params={"status": "any", "limit": 1})
         order_count = payload.get("orders", []).__len__()
         return {
             "success": True,
@@ -191,7 +243,7 @@ def list_shopify_orders(
     params = {"status": status_filter, "limit": limit, "order": "created_at desc"}
 
     try:
-        payload = _shopify_request(raw, "orders.json", params=params)
+        payload = _shopify_request(db, str(current_user.id), raw, "orders.json", params=params)
         orders = payload.get("orders", [])
         mapped = []
         for order in orders:
@@ -227,7 +279,7 @@ def get_shopify_order(order_id: str, current_user: User = Depends(get_current_us
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shopify config not found")
 
     try:
-        payload = _shopify_request(raw, f"orders/{order_id}.json", params={"status": "any"})
+        payload = _shopify_request(db, str(current_user.id), raw, f"orders/{order_id}.json", params={"status": "any"})
         order = payload.get("order")
         if not order:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
