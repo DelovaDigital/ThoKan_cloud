@@ -414,6 +414,13 @@ export default function SettingsPage() {
         <section className="glass rounded-2xl p-5">
           <h2 className="text-xl font-semibold">Shopify Integration</h2>
           <p className="mt-1 text-sm opacity-60">Connect your Shopify store to display recent orders in the dashboard.</p>
+          <p className="mt-2 text-xs opacity-70">
+            Gebruik hier je <strong>.myshopify.com</strong> admin domein (niet je storefront domein zoals thokan.be).
+          </p>
+          <p className="mt-1 text-xs opacity-70">
+            Access token: Shopify Admin → Apps and sales channels → Develop apps → jouw app → Configuration (scope: read_orders)
+            → Install app → API credentials → Admin API access token.
+          </p>
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <div>

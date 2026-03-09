@@ -84,13 +84,17 @@ export default function DashboardPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [result, shopifyOrders] = await Promise.all([
-        api<DashboardData>("/dashboard"),
-        api<{ orders: ShopifyOrder[] }>("/shopify/orders?limit=10").catch(() => ({ orders: [] })),
-      ]);
+      const result = await api<DashboardData>("/dashboard");
       setData(result);
-      setOrders(shopifyOrders.orders || []);
-      setOrdersError("");
+
+      try {
+        const shopifyOrders = await api<{ orders: ShopifyOrder[] }>("/shopify/orders?limit=10");
+        setOrders(shopifyOrders.orders || []);
+        setOrdersError("");
+      } catch (err) {
+        setOrders([]);
+        setOrdersError(err instanceof Error ? err.message : "Failed to load Shopify orders");
+      }
     } catch {
       setData(null);
       setOrders([]);
