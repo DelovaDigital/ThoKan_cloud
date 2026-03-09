@@ -41,7 +41,11 @@ class Settings(BaseSettings):
     smtp_use_ssl: bool = False
 
     rate_limit_per_minute: int = 120
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "capacitor://localhost",
+        "ionic://localhost",
+    ]
 
     @property
     def database_url(self) -> str:

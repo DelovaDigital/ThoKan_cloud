@@ -1,4 +1,15 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1";
+function resolveApiBase() {
+  const webBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1";
+  const nativeBase = process.env.NEXT_PUBLIC_NATIVE_API_BASE_URL;
+
+  if (typeof window !== "undefined" && window.location.protocol === "capacitor:") {
+    return nativeBase || webBase;
+  }
+
+  return webBase;
+}
+
+const API_BASE = resolveApiBase();
 
 function authHeaders() {
   if (typeof window === "undefined") return {};

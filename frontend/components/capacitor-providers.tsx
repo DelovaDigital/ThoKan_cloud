@@ -3,9 +3,14 @@
 import { useEffect } from 'react';
 import { App } from '@capacitor/app';
 import { Network } from '@capacitor/network';
+import { Capacitor } from '@capacitor/core';
 
 export function CapacitorProviders() {
   useEffect(() => {
+    if (!Capacitor.isNativePlatform()) {
+      return;
+    }
+
     // Prevent default back button behavior on Android
     const handleAppBackButton = async () => {
       try {
@@ -15,23 +20,29 @@ export function CapacitorProviders() {
       }
     };
 
-    if (typeof window !== 'undefined' && 'Capacitor' in window) {
-      App.addListener('backButton', handleAppBackButton);
+    let appBackButtonListener: { remove: () => Promise<void> } | undefined;
+    let networkListener: { remove: () => Promise<void> } | undefined;
 
-      // Monitor network status
-      const unsubscribe = Network.addListener('networkStatusChange', (status) => {
+    const setupListeners = async () => {
+      if (Capacitor.getPlatform() === 'android') {
+        appBackButtonListener = await App.addListener('backButton', handleAppBackButton);
+      }
+
+      networkListener = await Network.addListener('networkStatusChange', (status) => {
         if (status.connected) {
           localStorage.setItem('isOnline', 'true');
         } else {
           localStorage.setItem('isOnline', 'false');
         }
       });
+    };
 
-      return () => {
-        App.removeAllListeners();
-        unsubscribe?.remove?.();
-      };
-    }
+    void setupListeners();
+
+    return () => {
+      void appBackButtonListener?.remove();
+      void networkListener?.remove();
+    };
   }, []);
 
   return null;

@@ -1,11 +1,11 @@
 {
   "/_not-found/page": "/_not-found",
-  "/dashboard/page": "/dashboard",
-  "/admin/page": "/admin",
-  "/files/page": "/files",
-  "/page": "/",
   "/login/page": "/login",
-  "/settings/page": "/settings",
   "/mail/page": "/mail",
-  "/register/page": "/register"
+  "/page": "/",
+  "/register/page": "/register",
+  "/settings/page": "/settings",
+  "/admin/page": "/admin",
+  "/dashboard/page": "/dashboard",
+  "/files/page": "/files"
 }
