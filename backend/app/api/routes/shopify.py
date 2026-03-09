@@ -1,5 +1,6 @@
 import base64
 import re
+from urllib.parse import parse_qs, unquote, urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -19,9 +20,23 @@ def _shopify_key(user_id: str) -> str:
 
 def _normalize_store_domain(value: str) -> str:
     domain = (value or "").strip().lower()
+
+    if "shop=" in domain:
+        parsed = urlparse(domain)
+        query_shop = parse_qs(parsed.query).get("shop", [""])[0]
+        if query_shop:
+            domain = unquote(query_shop).strip().lower()
+
     domain = re.sub(r"^https?://", "", domain)
     domain = domain.split("/")[0]
     return domain
+
+
+def _normalize_access_token(value: str) -> str:
+    token = (value or "").strip()
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip()
+    return token
 
 
 def _get_raw_config(db: Session, user_id: str) -> dict | None:
@@ -52,7 +67,7 @@ def _decrypted_token(raw: dict) -> str:
 def _shopify_request(raw: dict, path: str, params: dict | None = None) -> dict:
     store_domain = _normalize_store_domain(raw.get("store_domain") or "")
     api_version = raw.get("api_version") or "2024-10"
-    access_token = _decrypted_token(raw)
+    access_token = _normalize_access_token(_decrypted_token(raw))
 
     if not store_domain or not access_token:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incomplete Shopify configuration")
@@ -62,6 +77,25 @@ def _shopify_request(raw: dict, path: str, params: dict | None = None) -> dict:
 
     with httpx.Client(timeout=20.0) as client:
         response = client.get(url, params=params or {}, headers=headers)
+
+    if response.status_code == 401:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Shopify authentication failed (401). Use the Admin API access token from your installed app, "
+                "not the app API key/secret. Verify store domain, ensure token belongs to this exact shop, "
+                "and reinstall the app after changing scopes."
+            ),
+        )
+
+    if response.status_code == 403:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Shopify authorization failed (403). Your token is valid but missing required scopes (e.g. read_orders). "
+                "Update scopes in app configuration, then reinstall the app and paste the new Admin API access token."
+            ),
+        )
 
     if response.status_code >= 400:
         detail = response.text[:400]
@@ -88,7 +122,7 @@ def save_shopify_config(payload: dict, current_user: User = Depends(get_current_
     raw = _get_raw_config(db, str(current_user.id)) or {}
     store_domain = _normalize_store_domain(payload.get("store_domain") or raw.get("store_domain") or "")
     api_version = (payload.get("api_version") or raw.get("api_version") or "2024-10").strip()
-    access_token = (payload.get("access_token") or "").strip()
+    access_token = _normalize_access_token(payload.get("access_token") or "")
 
     if not store_domain:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="store_domain is required")
@@ -96,6 +130,14 @@ def save_shopify_config(payload: dict, current_user: User = Depends(get_current_
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="store_domain must end with .myshopify.com",
+        )
+    if access_token and not re.match(r"^shp[a-z]+_", access_token):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "access_token appears invalid. Paste the Shopify Admin API access token "
+                "(usually starts with shp..._), not API key/secret."
+            ),
         )
 
     access_token_enc = raw.get("access_token_enc")

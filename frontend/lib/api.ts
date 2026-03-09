@@ -1,15 +1,33 @@
 function resolveApiBase() {
-  const webBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1";
+  const configuredWebBase = process.env.NEXT_PUBLIC_API_BASE_URL;
   const nativeBase = process.env.NEXT_PUBLIC_NATIVE_API_BASE_URL;
 
   if (typeof window !== "undefined" && window.location.protocol === "capacitor:") {
-    return nativeBase || webBase;
+    return nativeBase || configuredWebBase || "http://localhost:8000/api/v1";
   }
 
-  return webBase;
+  if (configuredWebBase) {
+    return configuredWebBase;
+  }
+
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname || "localhost";
+    return `http://${hostname}:8000/api/v1`;
+  }
+
+  return "http://localhost:8000/api/v1";
 }
 
-const API_BASE = resolveApiBase();
+function getApiBase() {
+  return resolveApiBase();
+}
+
+function normalizeFetchError(error: unknown): Error {
+  if (error instanceof TypeError && /fetch/i.test(error.message)) {
+    return new Error("Cannot reach API server. Check backend URL/CORS and that port 8000 is running.");
+  }
+  return error instanceof Error ? error : new Error("Request failed");
+}
 
 function authHeaders() {
   if (typeof window === "undefined") return {};
@@ -31,7 +49,7 @@ async function refreshAccessToken(): Promise<boolean> {
     const headers = new Headers();
     headers.set("Content-Type", "application/json");
 
-    const response = await fetch(`${API_BASE}/auth/refresh`, {
+    const response = await fetch(`${getApiBase()}/auth/refresh`, {
       method: "POST",
       headers,
       credentials: "include",
@@ -70,12 +88,17 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
     headers.set("x-csrf-token", csrf);
   }
 
-  let response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-    credentials: "include",
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${getApiBase()}${path}`, {
+      ...options,
+      headers,
+      credentials: "include",
+      cache: "no-store",
+    });
+  } catch (error) {
+    throw normalizeFetchError(error);
+  }
 
   // If 401, try refreshing token and retry once
   if (response.status === 401) {
@@ -91,17 +114,17 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
         retryHeaders.set("x-csrf-token", csrf);
       }
 
-      response = await fetch(`${API_BASE}${path}`, {
-        ...options,
-        headers: retryHeaders,
-        credentials: "include",
-        cache: "no-store",
-      });
-    } else {
-      // Refresh failed, redirect to login
-      if (typeof window !== "undefined") {
-        window.location.href = "/login";
+      try {
+        response = await fetch(`${getApiBase()}${path}`, {
+          ...options,
+          headers: retryHeaders,
+          credentials: "include",
+          cache: "no-store",
+        });
+      } catch (error) {
+        throw normalizeFetchError(error);
       }
+    } else {
       throw new Error("Session expired. Please log in again.");
     }
   }
@@ -129,12 +152,17 @@ export async function uploadFile(file: File, folderId?: string) {
     headers.set("x-csrf-token", csrf);
   }
 
-  let response = await fetch(`${API_BASE}/files/upload${query}`, {
-    method: "POST",
-    headers,
-    credentials: "include",
-    body: formData,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${getApiBase()}/files/upload${query}`, {
+      method: "POST",
+      headers,
+      credentials: "include",
+      body: formData,
+    });
+  } catch (error) {
+    throw normalizeFetchError(error);
+  }
 
   // If 401, try refreshing token and retry once
   if (response.status === 401) {
@@ -151,16 +179,17 @@ export async function uploadFile(file: File, folderId?: string) {
 
       const formData2 = new FormData();
       formData2.append("upload", file);
-      response = await fetch(`${API_BASE}/files/upload${query}`, {
-        method: "POST",
-        headers: retryHeaders,
-        credentials: "include",
-        body: formData2,
-      });
-    } else {
-      if (typeof window !== "undefined") {
-        window.location.href = "/login";
+      try {
+        response = await fetch(`${getApiBase()}/files/upload${query}`, {
+          method: "POST",
+          headers: retryHeaders,
+          credentials: "include",
+          body: formData2,
+        });
+      } catch (error) {
+        throw normalizeFetchError(error);
       }
+    } else {
       throw new Error("Session expired. Please log in again.");
     }
   }
