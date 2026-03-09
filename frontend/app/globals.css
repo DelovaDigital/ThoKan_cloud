@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 248 250 252;
+  --fg: 15 23 42;
+  --card: 255 255 255;
+  --border: 203 213 225;
+  --accent: 59 130 246;
+}
+
+.dark {
+  --bg: 2 6 23;
+  --fg: 226 232 240;
+  --card: 15 23 42;
+  --border: 51 65 85;
+  --accent: 56 189 248;
+}
+
+body {
+  @apply bg-bg text-fg antialiased;
+}
+
+.glass {
+  @apply border border-border/60 bg-card/60 backdrop-blur-md shadow-glass;
+}
