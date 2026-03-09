@@ -46,6 +46,12 @@ type UpdateStatus = {
   stderr?: string | null;
 };
 
+type ShopifyConfig = {
+  store_domain: string;
+  api_version: string;
+  has_access_token: boolean;
+};
+
 export default function SettingsPage() {
   const [info, setInfo] = useState<SystemInfo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -57,10 +63,16 @@ export default function SettingsPage() {
   const [updateBusy, setUpdateBusy] = useState(false);
   const [dryRun, setDryRun] = useState(true);
   const [updateFile, setUpdateFile] = useState<File | null>(null);
+  const [shopifyDomain, setShopifyDomain] = useState("");
+  const [shopifyApiVersion, setShopifyApiVersion] = useState("2024-10");
+  const [shopifyAccessToken, setShopifyAccessToken] = useState("");
+  const [shopifyHasToken, setShopifyHasToken] = useState(false);
+  const [shopifyBusy, setShopifyBusy] = useState(false);
 
   useEffect(() => {
     loadInfo();
     loadUpdateData();
+    loadShopifyConfig();
   }, []);
 
   async function loadInfo() {
@@ -145,6 +157,42 @@ export default function SettingsPage() {
       await loadUpdateData();
     }
     setUpdateBusy(false);
+  }
+
+  async function loadShopifyConfig() {
+    try {
+      const row = await api<ShopifyConfig>("/shopify/config");
+      setShopifyDomain(row.store_domain || "");
+      setShopifyApiVersion(row.api_version || "2024-10");
+      setShopifyHasToken(Boolean(row.has_access_token));
+    } catch {
+      // keep section optional if route not yet available
+    }
+  }
+
+  async function saveShopifyConfig() {
+    setShopifyBusy(true);
+    setStatus("");
+    try {
+      const payload: { store_domain: string; api_version: string; access_token?: string } = {
+        store_domain: shopifyDomain,
+        api_version: shopifyApiVersion,
+      };
+      if (shopifyAccessToken.trim()) {
+        payload.access_token = shopifyAccessToken.trim();
+      }
+
+      const result = await api<{ message: string }>("/shopify/config", {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      setStatus(result.message);
+      setShopifyAccessToken("");
+      await loadShopifyConfig();
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to save Shopify config");
+    }
+    setShopifyBusy(false);
   }
 
   async function updateStoragePath(path: string) {
@@ -311,6 +359,56 @@ export default function SettingsPage() {
                 No mount points detected (may require Linux system with /proc/mounts)
               </div>
             )}
+          </div>
+        </section>
+
+        <section className="glass rounded-2xl p-5">
+          <h2 className="text-xl font-semibold">Shopify Integration</h2>
+          <p className="mt-1 text-sm opacity-60">Connect your Shopify store to display recent orders in the dashboard.</p>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium">Store Domain</label>
+              <input
+                type="text"
+                className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+                placeholder="your-store.myshopify.com"
+                value={shopifyDomain}
+                onChange={(e) => setShopifyDomain(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">API Version</label>
+              <input
+                type="text"
+                className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+                placeholder="2024-10"
+                value={shopifyApiVersion}
+                onChange={(e) => setShopifyApiVersion(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <label className="block text-sm font-medium">Admin API Access Token</label>
+            <input
+              type="password"
+              className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+              placeholder={shopifyHasToken ? "Token already saved (leave empty to keep)" : "shpat_..."}
+              value={shopifyAccessToken}
+              onChange={(e) => setShopifyAccessToken(e.target.value)}
+            />
+            {shopifyHasToken && <p className="mt-1 text-xs opacity-60">A token is already stored securely.</p>}
+          </div>
+
+          <div className="mt-4">
+            <button
+              onClick={saveShopifyConfig}
+              disabled={!shopifyDomain || !shopifyApiVersion || shopifyBusy}
+              className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+            >
+              {shopifyBusy ? "Saving..." : "Save Shopify Config"}
+            </button>
           </div>
         </section>
 
