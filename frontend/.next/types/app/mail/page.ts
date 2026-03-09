@@ -1,4 +1,4 @@
-// File: /Users/alessiodepreytere/Documents/GitHub/ThoKan_cloud/frontend/app/mail/page.tsx
+// File: /Users/alessio/Documents/GitHub/ThoKan_cloud/frontend/app/mail/page.tsx
 import * as entry from '../../../../app/mail/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

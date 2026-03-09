@@ -13,6 +13,8 @@ cp .env.example .env
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+For Capacitor native apps (iOS/Android), make sure CORS allows `capacitor://localhost` (and optionally `ionic://localhost`).
+
 ## Key Routes
 
 - `/api/v1/auth/*`

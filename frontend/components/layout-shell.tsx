@@ -2,24 +2,57 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { Capacitor } from "@capacitor/core";
+import { LayoutGrid, Folder, Mail, Shield, Settings } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const items = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/files", label: "Files" },
-  { href: "/mail", label: "Mail" },
-  { href: "/admin", label: "Admin" },
-  { href: "/settings", label: "Settings" },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
+  { href: "/files", label: "Files", icon: Folder },
+  { href: "/mail", label: "Mail", icon: Mail },
+  { href: "/admin", label: "Admin", icon: Shield },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const isNative = Capacitor.isNativePlatform();
 
   function handleLogout() {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     router.push("/login");
+  }
+
+  if (isNative) {
+    return (
+      <div className="min-h-screen bg-bg pt-safe-top-offset pb-32">
+        <main className="px-3 py-3">{children}</main>
+
+        <nav className="bottom-safe-lift fixed inset-x-3 z-30 rounded-2xl border border-border/60 bg-card/95 backdrop-blur-md">
+          <div className="grid grid-cols-5 px-1 py-3">
+            {items.map((item) => {
+              const active = pathname.startsWith(item.href);
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[11px] transition ${
+                    active ? "text-accent" : "opacity-70"
+                  }`}
+                >
+                  <Icon className={`h-4 w-4 ${active ? "text-accent" : ""}`} />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      </div>
+    );
   }
 
   return (
