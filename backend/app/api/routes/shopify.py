@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, get_user_roles
 from app.models import SystemSetting, User
 from app.services.encryption import decrypt_bytes, encrypt_bytes
 
@@ -16,6 +16,10 @@ router = APIRouter()
 
 def _shopify_key(user_id: str) -> str:
     return f"shopify:{user_id}"
+
+
+def _global_shopify_key() -> str:
+    return "shopify:global"
 
 
 def _normalize_store_domain(value: str) -> str:
@@ -39,19 +43,30 @@ def _normalize_access_token(value: str) -> str:
     return token
 
 
-def _get_raw_config(db: Session, user_id: str) -> dict | None:
-    row = db.get(SystemSetting, _shopify_key(user_id))
+def _get_direct_raw_config(db: Session, key: str) -> dict | None:
+    row = db.get(SystemSetting, key)
     return row.value if row else None
 
 
-def _save_config(db: Session, user_id: str, value: dict) -> None:
-    row = db.get(SystemSetting, _shopify_key(user_id))
+def _get_raw_config(db: Session, user_id: str) -> dict | None:
+    direct = _get_direct_raw_config(db, _shopify_key(user_id))
+    if direct:
+        return direct
+    return _get_direct_raw_config(db, _global_shopify_key())
+
+
+def _is_global_shopify_config(db: Session, user_id: str) -> bool:
+    return _get_direct_raw_config(db, _shopify_key(user_id)) is None and _get_direct_raw_config(db, _global_shopify_key()) is not None
+
+
+def _save_config(db: Session, key: str, updated_by: str, value: dict) -> None:
+    row = db.get(SystemSetting, key)
     if not row:
-        row = SystemSetting(key=_shopify_key(user_id), value=value, updated_by=user_id)
+        row = SystemSetting(key=key, value=value, updated_by=updated_by)
         db.add(row)
     else:
         row.value = value
-        row.updated_by = user_id
+        row.updated_by = updated_by
     db.commit()
 
 
@@ -148,12 +163,19 @@ def get_shopify_config(current_user: User = Depends(get_current_user), db: Sessi
         "api_version": raw.get("api_version", "2024-10"),
         "has_access_token": bool(raw.get("access_token_enc") and raw.get("access_token_iv")),
         "has_client_credentials": bool(raw.get("client_id") and raw.get("client_secret_enc") and raw.get("client_secret_iv")),
+        "is_global": _is_global_shopify_config(db, str(current_user.id)),
     }
 
 
 @router.put("/config")
 def save_shopify_config(payload: dict, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    raw = _get_raw_config(db, str(current_user.id)) or {}
+    apply_to_all = bool(payload.get("apply_to_all", False))
+    role_names = get_user_roles(db, current_user.id)
+    if apply_to_all and "admin" not in role_names:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Alleen beheerders kunnen Shopify-configuratie voor alle accounts opslaan")
+
+    target_key = _global_shopify_key() if apply_to_all else _shopify_key(str(current_user.id))
+    raw = _get_direct_raw_config(db, target_key) or {}
     store_domain = _normalize_store_domain(payload.get("store_domain") or raw.get("store_domain") or "")
     api_version = (payload.get("api_version") or raw.get("api_version") or "2024-10").strip()
     access_token = _normalize_access_token(payload.get("access_token") or "")
@@ -205,8 +227,8 @@ def save_shopify_config(payload: dict, current_user: User = Depends(get_current_
         "client_secret_enc": client_secret_enc,
         "client_secret_iv": client_secret_iv,
     }
-    _save_config(db, str(current_user.id), data)
-    return {"message": "Shopify configuration saved"}
+    _save_config(db, target_key, str(current_user.id), data)
+    return {"message": "Shopify-configuratie opgeslagen" + (" voor alle accounts" if apply_to_all else "")}
 
 
 @router.get("/test")

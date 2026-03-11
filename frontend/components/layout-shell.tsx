@@ -95,7 +95,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.14),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(14,165,233,0.1),_transparent_26%)]" />
       <div className="relative mx-auto grid max-w-7xl grid-cols-12 gap-4 p-4 lg:gap-5 lg:p-5">
         <aside className="glass col-span-12 rounded-[2rem] p-4 lg:sticky lg:top-4 lg:col-span-3 lg:h-[calc(100vh-2rem)] lg:overflow-hidden lg:p-5">
-          <div className="flex h-full flex-col">
+          <div className="flex h-full min-h-0 flex-col">
             <div className="rounded-[1.75rem] border border-border/70 bg-card/50 p-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
@@ -118,7 +118,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
 
-            <nav className="mt-4 space-y-2">
+            <nav className="mt-4 flex-1 space-y-2 overflow-y-auto pr-1">
               {items.map((item) => {
                 const active = pathname.startsWith(item.href);
                 const Icon = item.icon;

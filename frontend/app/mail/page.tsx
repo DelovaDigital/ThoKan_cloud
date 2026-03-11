@@ -18,6 +18,12 @@ type MailConfig = {
   smtp_use_ssl: boolean;
   has_password: boolean;
   email_signature: string;
+  is_global?: boolean;
+};
+
+type CurrentUser = {
+  id: string;
+  roles: string[];
 };
 
 type MailMessage = {
@@ -51,6 +57,9 @@ export default function MailPage() {
   const [config, setConfig] = useState<MailConfig | null>(null);
   const [password, setPassword] = useState("");
   const [emailSignature, setEmailSignature] = useState("");
+  const [mailIsGlobal, setMailIsGlobal] = useState(false);
+  const [applyMailToAll, setApplyMailToAll] = useState(false);
+  const [canConfigureGlobal, setCanConfigureGlobal] = useState(false);
 
   // Folder navigation
   const [activeFolder, setActiveFolder] = useState<ActiveFolder>("inbox");
@@ -98,8 +107,16 @@ export default function MailPage() {
   // ─── Initialise ───────────────────────────────────────────────────────────
   useEffect(() => {
     api<MailConfig>("/mail/config")
-      .then(setConfig)
+      .then((data) => {
+        setConfig(data);
+        setMailIsGlobal(Boolean(data.is_global));
+        setApplyMailToAll(Boolean(data.is_global));
+      })
       .catch((err) => setStatusMsg(err.message || "Mailconfig laden mislukt"));
+
+    api<CurrentUser>("/auth/me")
+      .then((me) => setCanConfigureGlobal(Boolean(me.roles?.includes("admin"))))
+      .catch(() => setCanConfigureGlobal(false));
   }, []);
 
   useEffect(() => {
@@ -129,12 +146,14 @@ export default function MailPage() {
     try {
       await api<{ message: string }>("/mail/config", {
         method: "PUT",
-        body: JSON.stringify({ ...config, password, email_signature: emailSignature }),
+        body: JSON.stringify({ ...config, password, email_signature: emailSignature, apply_to_all: canConfigureGlobal ? applyMailToAll : false }),
       });
       setPassword("");
       setStatusMsg("Mailboxconfig opgeslagen");
       const fresh = await api<MailConfig>("/mail/config");
       setConfig(fresh);
+      setMailIsGlobal(Boolean(fresh.is_global));
+      setApplyMailToAll(Boolean(fresh.is_global));
       setEmailSignature(fresh.email_signature || DEFAULT_EMAIL_SIGNATURE);
     } catch (err) {
       setStatusMsg(err instanceof Error ? err.message : "Opslaan mislukt");
@@ -600,6 +619,16 @@ export default function MailPage() {
                 <button className="rounded-xl bg-accent/80 px-4 py-2 text-white hover:bg-accent" onClick={saveConfig}>Instellingen opslaan</button>
                 <button className="rounded-xl border border-border px-4 py-2 hover:bg-card/70" onClick={testConnection}>Verbinding testen</button>
               </div>
+
+              {canConfigureGlobal && (
+                <label className="mt-4 flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm">
+                  <input type="checkbox" checked={applyMailToAll} onChange={(e) => setApplyMailToAll(e.target.checked)} />
+                  Deze mailboxconfiguratie voor alle accounts gebruiken
+                </label>
+              )}
+              {mailIsGlobal && (
+                <p className="mt-2 text-xs opacity-60">Deze mailboxconfiguratie wordt momenteel globaal gebruikt voor alle accounts zonder eigen instelling.</p>
+              )}
 
               <div className="mt-6 border-t border-border pt-5">
                 <h4 className="mb-2 text-sm font-semibold">E-mailsignatuur</h4>

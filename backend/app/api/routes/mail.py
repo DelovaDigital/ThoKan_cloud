@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, get_user_roles
 from app.models import SystemSetting, User
 from app.services.encryption import decrypt_bytes, encrypt_bytes
 
@@ -51,6 +51,10 @@ DEFAULT_EMAIL_SIGNATURE_TEXT = "ThoKan\nBTW-nummer: 1034.077.111\nTel: 0475 50 6
 
 def _mail_key(user_id: str) -> str:
     return f"mailbox:{user_id}"
+
+
+def _global_mail_key() -> str:
+    return "mailbox:global"
 
 
 def _decode_mime(value: str | None) -> str:
@@ -140,9 +144,20 @@ def _extract_text_snippet(message: email.message.Message) -> str:
     return ""
 
 
-def _get_raw_config(db: Session, user_id: str) -> dict | None:
-    row = db.get(SystemSetting, _mail_key(user_id))
+def _get_direct_raw_config(db: Session, key: str) -> dict | None:
+    row = db.get(SystemSetting, key)
     return row.value if row else None
+
+
+def _get_raw_config(db: Session, user_id: str) -> dict | None:
+    direct = _get_direct_raw_config(db, _mail_key(user_id))
+    if direct:
+        return direct
+    return _get_direct_raw_config(db, _global_mail_key())
+
+
+def _is_global_mail_config(db: Session, user_id: str) -> bool:
+    return _get_direct_raw_config(db, _mail_key(user_id)) is None and _get_direct_raw_config(db, _global_mail_key()) is not None
 
 
 def _decrypted_password(raw: dict) -> str:
@@ -154,14 +169,14 @@ def _decrypted_password(raw: dict) -> str:
     return decrypt_bytes(encrypted, iv).decode("utf-8")
 
 
-def _save_config(db: Session, user_id: str, value: dict) -> None:
-    row = db.get(SystemSetting, _mail_key(user_id))
+def _save_config(db: Session, key: str, updated_by: str, value: dict) -> None:
+    row = db.get(SystemSetting, key)
     if not row:
-        row = SystemSetting(key=_mail_key(user_id), value=value, updated_by=user_id)
+        row = SystemSetting(key=key, value=value, updated_by=updated_by)
         db.add(row)
     else:
         row.value = value
-        row.updated_by = user_id
+        row.updated_by = updated_by
     db.commit()
 
 
@@ -301,6 +316,7 @@ def get_mail_config(current_user: User = Depends(get_current_user), db: Session 
             "smtp_use_ssl": False,
             "has_password": False,
             "email_signature": DEFAULT_EMAIL_SIGNATURE_HTML,
+            "is_global": False,
         }
 
     return {
@@ -315,11 +331,17 @@ def get_mail_config(current_user: User = Depends(get_current_user), db: Session 
         "smtp_use_ssl": raw.get("smtp_use_ssl", False),
         "has_password": bool(raw.get("password_enc")),
         "email_signature": raw.get("email_signature") or DEFAULT_EMAIL_SIGNATURE_HTML,
+        "is_global": _is_global_mail_config(db, str(current_user.id)),
     }
 
 
 @router.put("/config")
 def save_mail_config(payload: dict, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    apply_to_all = bool(payload.get("apply_to_all", False))
+    role_names = get_user_roles(db, current_user.id)
+    if apply_to_all and "admin" not in role_names:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Alleen beheerders kunnen mailconfiguratie voor alle accounts opslaan")
+
     email_address = payload.get("email") or current_user.email
     username = payload.get("username") or email_address
     imap_host = payload.get("imap_host")
@@ -330,7 +352,8 @@ def save_mail_config(payload: dict, current_user: User = Depends(get_current_use
     if not imap_host:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="imap_host is required")
 
-    existing = _get_raw_config(db, str(current_user.id)) or {}
+    target_key = _global_mail_key() if apply_to_all else _mail_key(str(current_user.id))
+    existing = _get_direct_raw_config(db, target_key) or {}
     encoded_password = existing.get("password_enc")
     password_iv = existing.get("password_iv")
     if password:
@@ -352,8 +375,8 @@ def save_mail_config(payload: dict, current_user: User = Depends(get_current_use
         "password_iv": password_iv,
         "email_signature": email_signature,
     }
-    _save_config(db, str(current_user.id), data)
-    return {"message": "Mailbox configuration saved"}
+    _save_config(db, target_key, str(current_user.id), data)
+    return {"message": "Mailboxconfig opgeslagen" + (" voor alle accounts" if apply_to_all else "")}
 
 
 @router.post("/test")

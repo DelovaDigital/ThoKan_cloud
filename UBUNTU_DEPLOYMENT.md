@@ -191,20 +191,20 @@ docker compose up -d --build
 
 ## Met domeinnaam (optioneel)
 
-Als je een domeinnaam hebt (bijv. `thokan.be`):
+Als je een domeinnaam hebt (bijv. `thokan.cloud`):
 
 ### 1. Configureer DNS
 
 Maak een A-record:
 ```
-thokan.be → YOUR_SERVER_IP
+thokan.cloud → YOUR_SERVER_IP
 ```
 
 ### 2. Update .env
 
 ```dotenv
-CORS_ORIGINS=https://thokan.be,http://thokan.be,http://localhost:3000
-NEXT_PUBLIC_API_BASE_URL=https://thokan.be/api/v1
+CORS_ORIGINS=https://thokan.cloud,http://thokan.cloud,http://localhost:3000
+NEXT_PUBLIC_API_BASE_URL=https://thokan.cloud/api/v1
 ```
 
 ### 3. Gebruik Nginx met SSL

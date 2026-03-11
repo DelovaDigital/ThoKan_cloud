@@ -49,6 +49,40 @@ export default function AdminPage() {
     load();
   }, []);
 
+  async function renameUser(userId: string, currentName: string) {
+    const fullName = prompt("Nieuwe naam", currentName)?.trim();
+    if (!fullName || fullName === currentName) return;
+
+    setStatus("");
+    setError("");
+    try {
+      const result = await api<{ message: string }>(`/admin/users/${userId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ full_name: fullName }),
+      });
+      setStatus(result.message || "Gebruiker bijgewerkt");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gebruiker bijwerken mislukt");
+    }
+  }
+
+  async function deleteUser(userId: string, fullName: string) {
+    if (!confirm(`Gebruiker \"${fullName}\" verwijderen?`)) return;
+
+    setStatus("");
+    setError("");
+    try {
+      const result = await api<{ message: string }>(`/admin/users/${userId}`, {
+        method: "DELETE",
+      });
+      setStatus(result.message || "Gebruiker verwijderd");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gebruiker verwijderen mislukt");
+    }
+  }
+
   async function inviteUser(e: React.FormEvent) {
     e.preventDefault();
     setStatus("");
@@ -235,9 +269,23 @@ export default function AdminPage() {
                     <p className="truncate font-medium">{u.full_name}</p>
                     <p className="mt-1 truncate text-xs opacity-70">{u.email}</p>
                   </div>
-                  <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${u.is_active ? "bg-green-500/20 text-green-300" : "bg-red-500/20 text-red-300"}`}>
-                    {u.is_active ? "actief" : "inactief"}
-                  </span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${u.is_active ? "bg-green-500/20 text-green-300" : "bg-red-500/20 text-red-300"}`}>
+                      {u.is_active ? "actief" : "inactief"}
+                    </span>
+                    <button
+                      onClick={() => void renameUser(u.id, u.full_name)}
+                      className="rounded-xl border border-border px-3 py-1 text-xs transition hover:bg-card/70"
+                    >
+                      Naam wijzigen
+                    </button>
+                    <button
+                      onClick={() => void deleteUser(u.id, u.full_name)}
+                      className="rounded-xl border border-red-500/40 px-3 py-1 text-xs text-red-300 transition hover:bg-red-500/15"
+                    >
+                      Verwijderen
+                    </button>
+                  </div>
                 </li>
               ))}
               {visibleUsers.length === 0 && <li className="rounded-[1.5rem] border border-dashed border-border p-5 text-center opacity-60">Geen gebruikers gevonden voor deze filter.</li>}

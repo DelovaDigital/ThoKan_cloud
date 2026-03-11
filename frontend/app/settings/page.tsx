@@ -77,12 +77,19 @@ type ShopifyConfig = {
   api_version: string;
   has_access_token: boolean;
   has_client_credentials: boolean;
+  is_global?: boolean;
 };
 
 type GelatoConfig = {
   base_url: string;
   has_api_key: boolean;
   sku_map: Record<string, string>;
+  is_global?: boolean;
+};
+
+type CurrentUser = {
+  id: string;
+  roles: string[];
 };
 
 function SectionShell({
@@ -159,14 +166,19 @@ export default function SettingsPage() {
   const [shopifyClientId, setShopifyClientId] = useState("");
   const [shopifyClientSecret, setShopifyClientSecret] = useState("");
   const [shopifyHasClientCredentials, setShopifyHasClientCredentials] = useState(false);
+  const [shopifyIsGlobal, setShopifyIsGlobal] = useState(false);
+  const [shopifyApplyToAll, setShopifyApplyToAll] = useState(false);
   const [shopifyBusy, setShopifyBusy] = useState(false);
   const [shopifyTestStatus, setShopifyTestStatus] = useState("");
   const [testShopifyBusy, setTestShopifyBusy] = useState(false);
   const [gelatoBaseUrl, setGelatoBaseUrl] = useState("https://order.gelatoapis.com");
   const [gelatoApiKey, setGelatoApiKey] = useState("");
   const [gelatoHasKey, setGelatoHasKey] = useState(false);
+  const [gelatoIsGlobal, setGelatoIsGlobal] = useState(false);
+  const [gelatoApplyToAll, setGelatoApplyToAll] = useState(false);
   const [gelatoSkuMapText, setGelatoSkuMapText] = useState("{}");
   const [gelatoBusy, setGelatoBusy] = useState(false);
+  const [canConfigureGlobal, setCanConfigureGlobal] = useState(false);
   const [sectionFilter, setSectionFilter] = useState<"all" | "core" | "storage" | "integrations" | "updates">("all");
   const [sectionSearch, setSectionSearch] = useState("");
 
@@ -176,7 +188,17 @@ export default function SettingsPage() {
     loadUpdateConfig();
     loadShopifyConfig();
     loadGelatoConfig();
+    loadCurrentUser();
   }, []);
+
+  async function loadCurrentUser() {
+    try {
+      const me = await api<CurrentUser>("/auth/me");
+      setCanConfigureGlobal(Boolean(me.roles?.includes("admin")));
+    } catch {
+      setCanConfigureGlobal(false);
+    }
+  }
 
   async function loadInfo() {
     setLoading(true);
@@ -305,6 +327,8 @@ export default function SettingsPage() {
       setShopifyApiVersion(row.api_version || "2024-10");
       setShopifyHasToken(Boolean(row.has_access_token));
       setShopifyHasClientCredentials(Boolean(row.has_client_credentials));
+      setShopifyIsGlobal(Boolean(row.is_global));
+      setShopifyApplyToAll(Boolean(row.is_global));
     } catch {
       // keep section optional if route not yet available
     }
@@ -332,9 +356,11 @@ export default function SettingsPage() {
         access_token?: string;
         client_id?: string;
         client_secret?: string;
+        apply_to_all?: boolean;
       } = {
         store_domain: shopifyDomain,
         api_version: shopifyApiVersion,
+        apply_to_all: canConfigureGlobal ? shopifyApplyToAll : false,
       };
       if (shopifyAccessToken.trim()) {
         payload.access_token = shopifyAccessToken.trim();
@@ -366,6 +392,8 @@ export default function SettingsPage() {
       setGelatoBaseUrl(row.base_url || "https://order.gelatoapis.com");
       setGelatoHasKey(Boolean(row.has_api_key));
       setGelatoSkuMapText(JSON.stringify(row.sku_map || {}, null, 2));
+      setGelatoIsGlobal(Boolean(row.is_global));
+      setGelatoApplyToAll(Boolean(row.is_global));
     } catch {
       // keep section optional if route not yet available
     }
@@ -376,9 +404,10 @@ export default function SettingsPage() {
     setStatus("");
     try {
       const parsed = JSON.parse(gelatoSkuMapText || "{}") as Record<string, string>;
-      const payload: { base_url: string; sku_map: Record<string, string>; api_key?: string } = {
+      const payload: { base_url: string; sku_map: Record<string, string>; api_key?: string; apply_to_all?: boolean } = {
         base_url: gelatoBaseUrl,
         sku_map: parsed,
+        apply_to_all: canConfigureGlobal ? gelatoApplyToAll : false,
       };
       if (gelatoApiKey.trim()) {
         payload.api_key = gelatoApiKey.trim();
@@ -764,6 +793,16 @@ export default function SettingsPage() {
             <p className="mt-1 text-xs opacity-60">Clientgegevens zijn al veilig opgeslagen.</p>
           )}
 
+          {canConfigureGlobal && (
+            <label className="mt-4 flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
+              <input type="checkbox" checked={shopifyApplyToAll} onChange={(e) => setShopifyApplyToAll(e.target.checked)} />
+              Deze Shopify-configuratie voor alle accounts gebruiken
+            </label>
+          )}
+          {shopifyIsGlobal && (
+            <p className="mt-2 text-xs opacity-60">Deze Shopify-configuratie wordt momenteel globaal gebruikt voor alle accounts zonder eigen instelling.</p>
+          )}
+
           <div className="mt-4 flex gap-2">
             <button
               onClick={saveShopifyConfig}
@@ -836,6 +875,16 @@ export default function SettingsPage() {
               onChange={(e) => setGelatoSkuMapText(e.target.value)}
             />
           </div>
+
+          {canConfigureGlobal && (
+            <label className="mt-4 flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
+              <input type="checkbox" checked={gelatoApplyToAll} onChange={(e) => setGelatoApplyToAll(e.target.checked)} />
+              Deze Gelato-configuratie voor alle accounts gebruiken
+            </label>
+          )}
+          {gelatoIsGlobal && (
+            <p className="mt-2 text-xs opacity-60">Deze Gelato-configuratie wordt momenteel globaal gebruikt voor alle accounts zonder eigen instelling.</p>
+          )}
 
           <div className="mt-4">
             <button

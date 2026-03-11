@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, get_user_roles
 from app.models import SystemSetting, User
 from app.services.encryption import decrypt_bytes, encrypt_bytes
 
@@ -16,6 +16,10 @@ router = APIRouter()
 
 def _gelato_key(user_id: str) -> str:
     return f"gelato:{user_id}"
+
+
+def _global_gelato_key() -> str:
+    return "gelato:global"
 
 
 def _shopify_key(user_id: str) -> str:
@@ -29,9 +33,24 @@ def _normalize_shop_domain(value: str) -> str:
     return domain
 
 
-def _get_raw_config(db: Session, key: str) -> dict | None:
+def _get_direct_raw_config(db: Session, key: str) -> dict | None:
     row = db.get(SystemSetting, key)
     return row.value if row else None
+
+
+def _get_raw_config(db: Session, key: str) -> dict | None:
+    direct = _get_direct_raw_config(db, key)
+    if direct:
+        return direct
+    if key.startswith("gelato:"):
+        return _get_direct_raw_config(db, _global_gelato_key())
+    if key.startswith("shopify:"):
+        return _get_direct_raw_config(db, "shopify:global")
+    return None
+
+
+def _is_global_gelato_config(db: Session, user_id: str) -> bool:
+    return _get_direct_raw_config(db, _gelato_key(user_id)) is None and _get_direct_raw_config(db, _global_gelato_key()) is not None
 
 
 def _save_config(db: Session, key: str, user_id: str, value: dict) -> None:
@@ -357,13 +376,20 @@ def get_gelato_config(current_user: User = Depends(get_current_user), db: Sessio
         "base_url": raw.get("base_url", "https://order.gelatoapis.com"),
         "has_api_key": bool(raw.get("api_key_enc") and raw.get("api_key_iv")),
         "sku_map": raw.get("sku_map", {}),
+        "is_global": _is_global_gelato_config(db, str(current_user.id)),
     }
 
 
 @router.put("/config")
 def save_gelato_config(payload: dict, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     user_id = str(current_user.id)
-    raw = _get_raw_config(db, _gelato_key(user_id)) or {}
+    apply_to_all = bool(payload.get("apply_to_all", False))
+    role_names = get_user_roles(db, current_user.id)
+    if apply_to_all and "admin" not in role_names:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Alleen beheerders kunnen Gelato-configuratie voor alle accounts opslaan")
+
+    target_key = _global_gelato_key() if apply_to_all else _gelato_key(user_id)
+    raw = _get_direct_raw_config(db, target_key) or {}
     base_url = (payload.get("base_url") or raw.get("base_url") or "https://order.gelatoapis.com").strip()
     api_key = (payload.get("api_key") or "").strip()
     sku_map = payload.get("sku_map") if isinstance(payload.get("sku_map"), dict) else raw.get("sku_map") or {}
@@ -379,8 +405,8 @@ def save_gelato_config(payload: dict, current_user: User = Depends(get_current_u
         "api_key_iv": api_key_iv,
         "sku_map": sku_map,
     }
-    _save_config(db, _gelato_key(user_id), user_id, data)
-    return {"message": "Gelato configuration saved"}
+    _save_config(db, target_key, user_id, data)
+    return {"message": "Gelato-configuratie opgeslagen" + (" voor alle accounts" if apply_to_all else "")}
 
 
 @router.get("/catalog")
