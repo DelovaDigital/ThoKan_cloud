@@ -417,8 +417,62 @@ def get_inbox(limit: int = 50, skip: int = 0, current_user: User = Depends(get_c
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Inbox fetch failed: {exc}") from exc
 
 
+@router.get("/sent")
+def get_sent(limit: int = 50, skip: int = 0, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Fetch messages from Sent folder."""
+    raw = _get_raw_config(db, str(current_user.id))
+    if not raw:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mailbox config not found")
+
+    limit = min(max(1, limit), 100)
+
+    try:
+        client = _imap_client(raw)
+        sent_folder = _find_sent_folder(client)
+
+        # Try selecting with quotes first (handles spaces and special chars)
+        select_status, _ = client.select(f'"{sent_folder}"')
+        if select_status != "OK":
+            select_status, _ = client.select(sent_folder)
+        if select_status != "OK":
+            raise RuntimeError(f"Cannot open Sent folder: {sent_folder}")
+
+        status_code, data = client.search(None, "ALL")
+        if status_code != "OK":
+            raise RuntimeError("Unable to fetch sent messages")
+
+        ids = data[0].split()
+        total_count = len(ids)
+
+        selected_ids = ids[-(skip + limit):-skip] if skip > 0 else ids[-limit:]
+
+        messages = []
+        for message_id in reversed(selected_ids):
+            fetch_status, message_data = client.fetch(message_id, "(BODY.PEEK[HEADER.FIELDS (TO SUBJECT DATE)])")
+            if fetch_status != "OK" or not message_data:
+                continue
+            raw_message = message_data[0][1]
+            parsed = email.message_from_bytes(raw_message)
+            messages.append(
+                {
+                    "id": message_id.decode("utf-8", errors="ignore"),
+                    "from": "",
+                    "to": _decode_mime(parsed.get("To")),
+                    "subject": _decode_mime(parsed.get("Subject")),
+                    "date": parsed.get("Date", ""),
+                    "snippet": "",
+                }
+            )
+        client.logout()
+        return {"messages": messages, "total": total_count, "limit": limit, "skip": skip, "folder": sent_folder}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Sent fetch failed: {exc}") from exc
+
+
 @router.get("/message/{message_id}")
-def get_message(message_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_message(message_id: str, folder: str = "INBOX", current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Fetch full message details including body."""
     raw = _get_raw_config(db, str(current_user.id))
     if not raw:
@@ -426,7 +480,12 @@ def get_message(message_id: str, current_user: User = Depends(get_current_user),
 
     try:
         client = _imap_client(raw)
-        client.select("INBOX")
+        if folder and folder.upper() != "INBOX":
+            sel_status, _ = client.select(f'"{folder}"')
+            if sel_status != "OK":
+                client.select(folder)
+        else:
+            client.select("INBOX")
         fetch_status, message_data = client.fetch(message_id.encode(), "(RFC822)")
         if fetch_status != "OK" or not message_data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
@@ -487,6 +546,56 @@ def get_message(message_id: str, current_user: User = Depends(get_current_user),
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Message fetch failed: {exc}") from exc
 
 
+def _find_sent_folder(client: imaplib.IMAP4_SSL | imaplib.IMAP4) -> str:
+    """Find Sent folder on IMAP server, returns 'Sent' as fallback."""
+    try:
+        _, mailboxes = client.list()
+        if not mailboxes:
+            return "Sent"
+
+        # Check for \\Sent attribute flag first (most reliable)
+        for mailbox in mailboxes:
+            if not mailbox:
+                continue
+            mailbox_bytes = mailbox if isinstance(mailbox, bytes) else mailbox.encode()
+            if b"\\Sent" in mailbox_bytes:
+                parts = mailbox_bytes.rsplit(b'"', 2)
+                if len(parts) >= 2:
+                    name = parts[-2].decode("utf-8", errors="ignore").strip()
+                    if name:
+                        return name
+                parts = mailbox_bytes.rsplit(b" ", 1)
+                return parts[-1].decode("utf-8", errors="ignore").strip().strip('"')
+
+        # Fall back to name matching
+        sent_patterns = [
+            b"[Gmail]/Sent Mail",
+            b"Sent Items",
+            b"Sent Messages",
+            b"INBOX.Sent",
+            b"Sent Mail",
+            b"Sent",
+        ]
+        for mailbox in mailboxes:
+            if not mailbox:
+                continue
+            mailbox_bytes = mailbox if isinstance(mailbox, bytes) else mailbox.encode()
+            mailbox_lower = mailbox_bytes.lower()
+            for pattern in sent_patterns:
+                if pattern.lower() in mailbox_lower:
+                    parts = mailbox_bytes.rsplit(b'"', 2)
+                    if len(parts) >= 2:
+                        name = parts[-2].decode("utf-8", errors="ignore").strip()
+                        if name:
+                            return name
+                    parts = mailbox_bytes.rsplit(b" ", 1)
+                    return parts[-1].decode("utf-8", errors="ignore").strip().strip('"')
+
+        return "Sent"
+    except Exception:
+        return "Sent"
+
+
 def _find_trash_folder(client: imaplib.IMAP4_SSL | imaplib.IMAP4) -> str | None:
     """Find Trash/Deleted Items folder on IMAP server."""
     try:
@@ -517,14 +626,19 @@ def _find_trash_folder(client: imaplib.IMAP4_SSL | imaplib.IMAP4) -> str | None:
 
 
 @router.delete("/message/{message_id}")
-def delete_message(message_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_message(message_id: str, folder: str = "INBOX", current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     raw = _get_raw_config(db, str(current_user.id))
     if not raw:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mailbox config not found")
 
     try:
         client = _imap_client(raw)
-        client.select("INBOX")
+        if folder and folder.upper() != "INBOX":
+            sel_status, _ = client.select(f'"{folder}"')
+            if sel_status != "OK":
+                client.select(folder)
+        else:
+            client.select("INBOX")
 
         fetch_status, message_data = client.fetch(message_id.encode(), "(RFC822)")
         if fetch_status != "OK" or not message_data:

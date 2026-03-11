@@ -23,6 +23,7 @@ type MailConfig = {
 type MailMessage = {
   id: string;
   from: string;
+  to?: string;
   subject: string;
   date: string;
   snippet: string;
@@ -42,200 +43,244 @@ type MailDetail = {
   html_body: string;
 };
 
+type ActiveFolder = "inbox" | "sent";
+type SortOrder = "newest" | "oldest" | "subject" | "sender";
+
 export default function MailPage() {
+  // Config
   const [config, setConfig] = useState<MailConfig | null>(null);
   const [password, setPassword] = useState("");
+  const [emailSignature, setEmailSignature] = useState("");
+
+  // Folder navigation
+  const [activeFolder, setActiveFolder] = useState<ActiveFolder>("inbox");
+
+  // Inbox state
   const [messages, setMessages] = useState<MailMessage[]>([]);
   const [inboxSearch, setInboxSearch] = useState("");
-  const [inboxSort, setInboxSort] = useState<"newest" | "oldest" | "subject" | "sender">("newest");
+  const [inboxSort, setInboxSort] = useState<SortOrder>("newest");
   const [snippetOnly, setSnippetOnly] = useState(false);
   const [loadingInbox, setLoadingInbox] = useState(false);
+  const [inboxPage, setInboxPage] = useState(0);
+  const [totalMessages, setTotalMessages] = useState(0);
+
+  // Sent state
+  const [sentMessages, setSentMessages] = useState<MailMessage[]>([]);
+  const [sentSearch, setSentSearch] = useState("");
+  const [sentSort, setSentSort] = useState<SortOrder>("newest");
+  const [loadingSent, setLoadingSent] = useState(false);
+  const [sentPage, setSentPage] = useState(0);
+  const [totalSent, setTotalSent] = useState(0);
+  const [sentFolderName, setSentFolderName] = useState("Sent");
+
+  // Message detail
   const [selectedMessage, setSelectedMessage] = useState<MailDetail | null>(null);
   const [emailHtmlUrl, setEmailHtmlUrl] = useState<string | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const [openedFromFolder, setOpenedFromFolder] = useState<string>("INBOX");
+
+  // Compose
   const [showCompose, setShowCompose] = useState(false);
-  const [showReply, setShowReply] = useState(false);
   const [to, setTo] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [status, setStatus] = useState<string>("");
-  const [emailSignature, setEmailSignature] = useState("");
-  const [totalMessages, setTotalMessages] = useState(0);
-  const [inboxPage, setInboxPage] = useState(0);
 
+  // Reply
+  const [showReply, setShowReply] = useState(false);
+  const [replyBody, setReplyBody] = useState("");
+
+  // Settings modal
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Status
+  const [statusMsg, setStatusMsg] = useState("");
+
+  // ─── Initialise ───────────────────────────────────────────────────────────
   useEffect(() => {
     api<MailConfig>("/mail/config")
       .then(setConfig)
-      .catch((err) => setStatus(err.message || "Failed to load mail config"));
+      .catch((err) => setStatusMsg(err.message || "Failed to load mail config"));
   }, []);
 
-  // Load signature from config or use sensible default
   useEffect(() => {
-    if (config) {
-      setEmailSignature(config.email_signature || DEFAULT_EMAIL_SIGNATURE);
-    }
+    if (config) setEmailSignature(config.email_signature || DEFAULT_EMAIL_SIGNATURE);
   }, [config]);
 
-  // Reload inbox when page changes or mailbox config becomes available
   useEffect(() => {
-    if (config?.has_password) {
-      loadInbox();
-    }
+    if (config?.has_password) loadInbox();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config?.has_password, inboxPage]);
 
-  // Cleanup blob URL on unmount or when closing modal
+  useEffect(() => {
+    if (config?.has_password && activeFolder === "sent") loadSent();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFolder, sentPage]);
+
   useEffect(() => {
     return () => {
-      if (emailHtmlUrl) {
-        URL.revokeObjectURL(emailHtmlUrl);
-      }
+      if (emailHtmlUrl) URL.revokeObjectURL(emailHtmlUrl);
     };
   }, [emailHtmlUrl]);
 
+  // ─── Config ───────────────────────────────────────────────────────────────
   async function saveConfig() {
     if (!config) return;
-    setStatus("");
+    setStatusMsg("");
     try {
       await api<{ message: string }>("/mail/config", {
         method: "PUT",
-        body: JSON.stringify({
-          ...config,
-          password,
-          email_signature: emailSignature,
-        }),
+        body: JSON.stringify({ ...config, password, email_signature: emailSignature }),
       });
       setPassword("");
-      setStatus("Mailbox config saved");
+      setStatusMsg("Mailbox config saved");
       const fresh = await api<MailConfig>("/mail/config");
       setConfig(fresh);
       setEmailSignature(fresh.email_signature || DEFAULT_EMAIL_SIGNATURE);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Save failed");
+      setStatusMsg(err instanceof Error ? err.message : "Save failed");
     }
   }
 
   async function testConnection() {
-    setStatus("");
+    setStatusMsg("");
     try {
-      const response = await api<{ message: string }>("/mail/test", { method: "POST" });
-      setStatus(response.message);
+      const res = await api<{ message: string }>("/mail/test", { method: "POST" });
+      setStatusMsg(res.message);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Test failed");
+      setStatusMsg(err instanceof Error ? err.message : "Test failed");
     }
   }
 
+  // ─── Folder loads ─────────────────────────────────────────────────────────
   async function loadInbox() {
     setLoadingInbox(true);
-    setStatus("");
+    setStatusMsg("");
     try {
-      const response = await api<{ messages: MailMessage[]; total: number; limit: number; skip: number }>(`/mail/inbox?limit=50&skip=${inboxPage * 50}`);
-      setMessages(response.messages || []);
-      setTotalMessages(response.total || 0);
+      const res = await api<{ messages: MailMessage[]; total: number }>(`/mail/inbox?limit=50&skip=${inboxPage * 50}`);
+      setMessages(res.messages || []);
+      setTotalMessages(res.total || 0);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Inbox load failed");
+      setStatusMsg(err instanceof Error ? err.message : "Inbox load failed");
     }
     setLoadingInbox(false);
   }
 
-  const visibleMessages = useMemo(() => {
-    const query = inboxSearch.trim().toLowerCase();
-    const filtered = messages.filter((msg) => {
-      if (snippetOnly && !msg.snippet?.trim()) return false;
-      if (!query) return true;
-      return [msg.subject, msg.from, msg.snippet].some((part) => part?.toLowerCase().includes(query));
-    });
+  async function loadSent() {
+    setLoadingSent(true);
+    setStatusMsg("");
+    try {
+      const res = await api<{ messages: MailMessage[]; total: number; folder: string }>(`/mail/sent?limit=50&skip=${sentPage * 50}`);
+      setSentMessages(res.messages || []);
+      setTotalSent(res.total || 0);
+      if (res.folder) setSentFolderName(res.folder);
+    } catch (err) {
+      setStatusMsg(err instanceof Error ? err.message : "Sent load failed");
+    }
+    setLoadingSent(false);
+  }
 
+  function refreshCurrentFolder() {
+    if (activeFolder === "inbox") loadInbox();
+    else loadSent();
+  }
+
+  // ─── Filtering ────────────────────────────────────────────────────────────
+  const visibleInbox = useMemo(() => {
+    const q = inboxSearch.trim().toLowerCase();
+    const filtered = messages.filter((m) => {
+      if (snippetOnly && !m.snippet?.trim()) return false;
+      if (!q) return true;
+      return [m.subject, m.from, m.snippet].some((p) => p?.toLowerCase().includes(q));
+    });
     return [...filtered].sort((a, b) => {
       if (inboxSort === "subject") return (a.subject || "").localeCompare(b.subject || "");
       if (inboxSort === "sender") return (a.from || "").localeCompare(b.from || "");
-      const timeA = new Date(a.date || 0).getTime();
-      const timeB = new Date(b.date || 0).getTime();
-      return inboxSort === "oldest" ? timeA - timeB : timeB - timeA;
+      const ta = new Date(a.date || 0).getTime();
+      const tb = new Date(b.date || 0).getTime();
+      return inboxSort === "oldest" ? ta - tb : tb - ta;
     });
   }, [messages, inboxSearch, inboxSort, snippetOnly]);
 
-  function decodeHtmlEntities(html: string): string {
-    const textarea = document.createElement('textarea');
-    textarea.innerHTML = html;
-    return textarea.value;
+  const visibleSent = useMemo(() => {
+    const q = sentSearch.trim().toLowerCase();
+    const filtered = sentMessages.filter((m) => {
+      if (!q) return true;
+      return [m.subject, m.to, m.snippet].some((p) => p?.toLowerCase().includes(q));
+    });
+    return [...filtered].sort((a, b) => {
+      if (sentSort === "subject") return (a.subject || "").localeCompare(b.subject || "");
+      if (sentSort === "sender") return (a.to || "").localeCompare(b.to || "");
+      const ta = new Date(a.date || 0).getTime();
+      const tb = new Date(b.date || 0).getTime();
+      return sentSort === "oldest" ? ta - tb : tb - ta;
+    });
+  }, [sentMessages, sentSearch, sentSort]);
+
+  // ─── Message detail ───────────────────────────────────────────────────────
+  function decodeHtmlEntities(htmlStr: string): string {
+    const ta = document.createElement("textarea");
+    ta.innerHTML = htmlStr;
+    return ta.value;
   }
 
-  async function openMessage(messageId: string) {
+  async function openMessage(messageId: string, folder: string) {
     setLoadingDetail(true);
+    setOpenedFromFolder(folder);
     try {
-      const detail = await api<MailDetail>(`/mail/message/${messageId}`);
-      
-      // Determine HTML content - check html_body first, then text_body if it contains HTML
+      const detail = await api<MailDetail>(`/mail/message/${messageId}?folder=${encodeURIComponent(folder)}`);
+
       let htmlContent = detail.html_body;
-      
-      // If no html_body but text_body looks like HTML, use that
       if (!htmlContent && detail.text_body) {
-        const trimmed = detail.text_body.trim();
-        if (trimmed.startsWith('<') || trimmed.toLowerCase().startsWith('<!doctype')) {
-          htmlContent = detail.text_body;
-        }
+        const t = detail.text_body.trim();
+        if (t.startsWith("<") || t.toLowerCase().startsWith("<!doctype")) htmlContent = detail.text_body;
       }
-      
-      // Decode HTML entities if they're escaped
-      if (htmlContent && htmlContent.includes('&lt;')) {
-        htmlContent = decodeHtmlEntities(htmlContent);
-      }
-      
-      // Create blob URL for iframe
+      if (htmlContent && htmlContent.includes("&lt;")) htmlContent = decodeHtmlEntities(htmlContent);
+
       if (htmlContent) {
-        // Cleanup old blob URL
-        if (emailHtmlUrl) {
-          URL.revokeObjectURL(emailHtmlUrl);
-        }
-        
-        const blob = new Blob([htmlContent], { type: 'text/html; charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        setEmailHtmlUrl(url);
+        if (emailHtmlUrl) URL.revokeObjectURL(emailHtmlUrl);
+        const blob = new Blob([htmlContent], { type: "text/html; charset=utf-8" });
+        setEmailHtmlUrl(URL.createObjectURL(blob));
       } else {
         setEmailHtmlUrl(null);
       }
-      
+
       setSelectedMessage(detail);
       setShowReply(false);
-      setBody("");
+      setReplyBody("");
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to load message");
+      setStatusMsg(err instanceof Error ? err.message : "Failed to load message");
     }
     setLoadingDetail(false);
   }
 
   function closeMessage() {
-    if (emailHtmlUrl) {
-      URL.revokeObjectURL(emailHtmlUrl);
-      setEmailHtmlUrl(null);
-    }
+    if (emailHtmlUrl) { URL.revokeObjectURL(emailHtmlUrl); setEmailHtmlUrl(null); }
     setSelectedMessage(null);
     setShowReply(false);
-    setBody("");
+    setReplyBody("");
   }
 
+  // ─── Send / Reply ─────────────────────────────────────────────────────────
   async function sendMail() {
-    setStatus("");
+    setStatusMsg("");
     try {
-      const response = await api<{ message: string }>("/mail/send", {
+      const res = await api<{ message: string }>("/mail/send", {
         method: "POST",
         body: JSON.stringify({ to, subject, body }),
       });
-      setStatus(response.message);
-      setTo("");
-      setSubject("");
-      setBody("");
+      setStatusMsg(res.message);
+      setTo(""); setSubject(""); setBody("");
+      setShowCompose(false);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Send failed");
+      setStatusMsg(err instanceof Error ? err.message : "Send failed");
     }
   }
 
   async function replyMail() {
     if (!selectedMessage) return;
-    setStatus("");
+    setStatusMsg("");
     try {
-      const response = await api<{ message: string }>("/mail/reply", {
+      const res = await api<{ message: string }>("/mail/reply", {
         method: "POST",
         body: JSON.stringify({
           reply_to: selectedMessage.reply_to || selectedMessage.from,
@@ -244,418 +289,391 @@ export default function MailPage() {
           message_id: selectedMessage.message_id,
           in_reply_to: selectedMessage.in_reply_to,
           references: selectedMessage.references,
-          body,
+          body: replyBody,
         }),
       });
-      setStatus(response.message);
-      setBody("");
+      setStatusMsg(res.message);
+      setReplyBody("");
       setShowReply(false);
-      await loadInbox();
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Reply failed");
+      setStatusMsg(err instanceof Error ? err.message : "Reply failed");
     }
   }
 
-  async function deleteMessage(messageId: string) {
+  async function deleteMessage(messageId: string, folder: string) {
     if (!confirm("Delete this email permanently?")) return;
-    setStatus("");
+    setStatusMsg("");
     try {
-      await api<{ message: string }>(`/mail/message/${messageId}`, { method: "DELETE" });
-      setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
-      if (selectedMessage?.id === messageId) {
-        closeMessage();
+      await api<{ message: string }>(`/mail/message/${messageId}?folder=${encodeURIComponent(folder)}`, { method: "DELETE" });
+      if (folder === "INBOX" || folder.toLowerCase() === "inbox") {
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      } else {
+        setSentMessages((prev) => prev.filter((m) => m.id !== messageId));
       }
-      setStatus("Email deleted");
+      if (selectedMessage?.id === messageId) closeMessage();
+      setStatusMsg("Email deleted");
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Delete failed");
+      setStatusMsg(err instanceof Error ? err.message : "Delete failed");
     }
   }
+
+  // ─── Shared sort selector ─────────────────────────────────────────────────
+  const SortSelect = ({ value, onChange, isSent }: { value: SortOrder; onChange: (v: SortOrder) => void; isSent?: boolean }) => (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as SortOrder)}
+      className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+    >
+      <option value="newest">Newest first</option>
+      <option value="oldest">Oldest first</option>
+      <option value="subject">Subject A–Z</option>
+      <option value="sender">{isSent ? "Recipient A–Z" : "Sender A–Z"}</option>
+    </select>
+  );
+
+  const folderLabel = activeFolder === "inbox" ? "Inbox" : "Sent";
+  const currentLoad = activeFolder === "inbox" ? loadingInbox : loadingSent;
+  const visibleList = activeFolder === "inbox" ? visibleInbox : visibleSent;
 
   return (
     <LayoutShell>
-      <div className="space-y-4">
-        {/* Header with action buttons */}
+      <div className="flex h-full flex-col gap-4">
+        {/* ── Sticky header ─────────────────────────────────────────── */}
         <div className="glass sticky top-3 z-20 flex items-center justify-between rounded-2xl p-4 backdrop-blur">
           <h2 className="text-xl font-semibold">Mailbox</h2>
           <div className="flex gap-2">
             <button
-              onClick={() => setShowCompose(!showCompose)}
+              onClick={() => { setTo(""); setSubject(""); setBody(""); setShowCompose(true); }}
               className="flex items-center gap-2 rounded-xl bg-accent/80 px-4 py-2 text-white transition hover:bg-accent"
             >
               <span>✉️</span>
-              <span>New Email</span>
+              <span className="hidden sm:inline">New Email</span>
             </button>
             <button
-              onClick={loadInbox}
+              onClick={refreshCurrentFolder}
               className="rounded-xl border border-border px-4 py-2 transition hover:bg-card/70"
             >
               Refresh
             </button>
             <button
-              onClick={() => setShowSettings(!showSettings)}
+              onClick={() => setShowSettings(true)}
               className="rounded-xl border border-border px-4 py-2 transition hover:bg-card/70"
-              title="Settings"
+              title="Mailbox settings"
             >
               ⚙️
             </button>
           </div>
         </div>
 
-        {status && (
-          <div className="glass rounded-xl p-4 text-sm">
-            <p>{status}</p>
+        {/* ── Status ────────────────────────────────────────────────── */}
+        {statusMsg && (
+          <div className="glass rounded-xl px-4 py-3 text-sm">
+            <span>{statusMsg}</span>
+            <button className="ml-3 opacity-50 hover:opacity-100" onClick={() => setStatusMsg("")}>✕</button>
           </div>
         )}
 
-        {/* Settings Panel (collapsible) */}
-        {showSettings && (
-          <section className="glass rounded-2xl p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Mailbox Settings</h3>
-              <button
-                onClick={() => setShowSettings(false)}
-                className="rounded-lg border border-border px-3 py-1 text-sm transition hover:bg-card/70"
-              >
-                Close
-              </button>
+        {/* ── Layout: sidebar + main ────────────────────────────────── */}
+        <div className="flex flex-1 gap-4">
+          {/* Sidebar */}
+          <aside className="glass flex w-44 shrink-0 flex-col gap-1 rounded-2xl p-3">
+            <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide opacity-50">Folders</p>
+            <button
+              onClick={() => { setActiveFolder("inbox"); if (config?.has_password) loadInbox(); }}
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition ${
+                activeFolder === "inbox" ? "bg-accent/20 font-medium" : "hover:bg-card/60"
+              }`}
+            >
+              <span>📥 Inbox</span>
+              {totalMessages > 0 && (
+                <span className="rounded-full bg-accent/30 px-2 py-0.5 text-xs">{totalMessages}</span>
+              )}
+            </button>
+            <button
+              onClick={() => { setActiveFolder("sent"); if (config?.has_password && sentMessages.length === 0) loadSent(); }}
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition ${
+                activeFolder === "sent" ? "bg-accent/20 font-medium" : "hover:bg-card/60"
+              }`}
+            >
+              <span>📤 Sent</span>
+              {totalSent > 0 && (
+                <span className="rounded-full bg-accent/30 px-2 py-0.5 text-xs">{totalSent}</span>
+              )}
+            </button>
+          </aside>
+
+          {/* Main panel */}
+          <main className="glass flex flex-1 flex-col gap-4 rounded-2xl p-5">
+            {/* Stats row */}
+            <div className="grid grid-cols-3 gap-3 text-sm">
+              <div className="rounded-xl border border-border bg-card/30 p-3">
+                <p className="text-xs opacity-60">On this page</p>
+                <p className="mt-1 text-xl font-semibold">{visibleList.length}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-card/30 p-3">
+                <p className="text-xs opacity-60">Total in {folderLabel}</p>
+                <p className="mt-1 text-xl font-semibold">
+                  {activeFolder === "inbox" ? totalMessages : totalSent}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border bg-card/30 p-3">
+                <p className="text-xs opacity-60">After filters</p>
+                <p className="mt-1 text-xl font-semibold">{visibleList.length}</p>
+              </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <input
-                className="rounded-xl border border-border bg-transparent px-3 py-2"
-                placeholder="Email"
-                value={config?.email || ""}
-                onChange={(e) => setConfig((prev) => (prev ? { ...prev, email: e.target.value } : prev))}
-              />
-              <input
-                className="rounded-xl border border-border bg-transparent px-3 py-2"
-                placeholder="Username"
-                value={config?.username || ""}
-                onChange={(e) => setConfig((prev) => (prev ? { ...prev, username: e.target.value } : prev))}
-              />
-              <input
-                className="rounded-xl border border-border bg-transparent px-3 py-2"
-                placeholder="IMAP host"
-                value={config?.imap_host || ""}
-                onChange={(e) => setConfig((prev) => (prev ? { ...prev, imap_host: e.target.value } : prev))}
-              />
-              <input
-                type="number"
-                className="rounded-xl border border-border bg-transparent px-3 py-2"
-                placeholder="IMAP port"
-                value={config?.imap_port || 993}
-                onChange={(e) =>
-                  setConfig((prev) => (prev ? { ...prev, imap_port: Number(e.target.value) || 993 } : prev))
-                }
-              />
-              <input
-                className="rounded-xl border border-border bg-transparent px-3 py-2"
-                placeholder="SMTP host"
-                value={config?.smtp_host || ""}
-                onChange={(e) => setConfig((prev) => (prev ? { ...prev, smtp_host: e.target.value } : prev))}
-              />
-              <input
-                type="number"
-                className="rounded-xl border border-border bg-transparent px-3 py-2"
-                placeholder="SMTP port"
-                value={config?.smtp_port || 587}
-                onChange={(e) =>
-                  setConfig((prev) => (prev ? { ...prev, smtp_port: Number(e.target.value) || 587 } : prev))
-                }
-              />
-            </div>
-
-            <input
-              type="password"
-              className="mt-3 w-full rounded-xl border border-border bg-transparent px-3 py-2"
-              placeholder={config?.has_password ? "Leave blank to keep current password" : "Mailbox password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-
-            <div className="mt-3 flex flex-wrap gap-3 text-sm">
-              <label className="flex items-center gap-2">
+            {/* Search / sort */}
+            {activeFolder === "inbox" ? (
+              <div className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
                 <input
-                  type="checkbox"
-                  checked={config?.imap_use_ssl ?? true}
-                  onChange={(e) => setConfig((prev) => (prev ? { ...prev, imap_use_ssl: e.target.checked } : prev))}
+                  value={inboxSearch}
+                  onChange={(e) => setInboxSearch(e.target.value)}
+                  placeholder="Search sender, subject, snippet…"
+                  className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                 />
-                IMAP SSL
-              </label>
-              <label className="flex items-center gap-2">
+                <SortSelect value={inboxSort} onChange={setInboxSort} />
+                <label className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm">
+                  <input type="checkbox" checked={snippetOnly} onChange={(e) => setSnippetOnly(e.target.checked)} />
+                  Has snippet
+                </label>
+              </div>
+            ) : (
+              <div className="grid gap-2 md:grid-cols-[1fr_auto]">
                 <input
-                  type="checkbox"
-                  checked={config?.smtp_use_tls ?? true}
-                  onChange={(e) => setConfig((prev) => (prev ? { ...prev, smtp_use_tls: e.target.checked } : prev))}
+                  value={sentSearch}
+                  onChange={(e) => setSentSearch(e.target.value)}
+                  placeholder="Search recipient, subject…"
+                  className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
                 />
-                SMTP TLS
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={config?.smtp_use_ssl ?? false}
-                  onChange={(e) => setConfig((prev) => (prev ? { ...prev, smtp_use_ssl: e.target.checked } : prev))}
-                />
-                SMTP SSL
-              </label>
-            </div>
+                <SortSelect value={sentSort} onChange={setSentSort} isSent />
+              </div>
+            )}
 
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button className="rounded-xl bg-accent/80 px-4 py-2 text-white" onClick={saveConfig}>
-                Save Settings
-              </button>
-              <button className="rounded-xl border border-border px-4 py-2" onClick={testConnection}>
-                Test Connection
-              </button>
-            </div>
-
-            <div className="mt-6 border-t border-border pt-6">
-              <h4 className="text-sm font-semibold mb-3">Email Signature (auto-appended to messages)</h4>
-              <textarea
-                className="h-40 w-full rounded-xl border border-border bg-transparent px-3 py-2 font-mono text-xs"
-                placeholder="HTML of platte tekst ondersteund"
-                value={emailSignature}
-                onChange={(e) => setEmailSignature(e.target.value)}
-              />
-              <p className="mt-1 text-xs opacity-60">Standaard bevat ThoKan branding, BTW-nummer en tel. Wordt toegevoegd aan elke verzonden mail.</p>
-            </div>
-          </section>
-        )}
-
-        {/* Compose Panel (collapsible) */}
-        {showCompose && (
-          <section className="glass rounded-2xl p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Compose Email</h3>
-              <button
-                onClick={() => setShowCompose(false)}
-                className="rounded-lg border border-border px-3 py-1 text-sm transition hover:bg-card/70"
-              >
-                Close
-              </button>
-            </div>
-            <div className="space-y-3">
-              <input
-                className="w-full rounded-xl border border-border bg-transparent px-3 py-2"
-                placeholder="To"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-              />
-              <input
-                className="w-full rounded-xl border border-border bg-transparent px-3 py-2"
-                placeholder="Subject"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-              />
-              <textarea
-                className="h-64 w-full rounded-xl border border-border bg-transparent px-3 py-2"
-                placeholder="Message"
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-              />
-              <div className="flex gap-2">
-                <button className="rounded-xl bg-accent/80 px-6 py-2 text-white transition hover:bg-accent" onClick={sendMail}>
-                  Send Email
-                </button>
+            {/* Pagination header */}
+            <div className="flex items-center justify-between">
+              <h3 className="font-medium">{folderLabel}</h3>
+              <div className="flex gap-2 text-xs">
                 <button
-                  className="rounded-xl border border-border px-4 py-2 transition hover:bg-card/70"
-                  onClick={() => {
-                    setTo("");
-                    setSubject("");
-                    setBody("");
-                  }}
+                  onClick={() => activeFolder === "inbox" ? setInboxPage((p) => Math.max(0, p - 1)) : setSentPage((p) => Math.max(0, p - 1))}
+                  disabled={(activeFolder === "inbox" ? inboxPage : sentPage) === 0}
+                  className="rounded-lg border border-border px-3 py-1 disabled:opacity-50"
                 >
-                  Clear
+                  ← Prev
+                </button>
+                <span className="px-2 py-1">Page {(activeFolder === "inbox" ? inboxPage : sentPage) + 1}</span>
+                <button
+                  onClick={() => activeFolder === "inbox" ? setInboxPage((p) => p + 1) : setSentPage((p) => p + 1)}
+                  disabled={(activeFolder === "inbox" ? messages : sentMessages).length < 50}
+                  className="rounded-lg border border-border px-3 py-1 disabled:opacity-50"
+                >
+                  Next →
                 </button>
               </div>
             </div>
-          </section>
-        )}
 
-        {/* Inbox */}
-        <section className="glass rounded-2xl p-5">
-          <div className="mb-4 grid gap-3 md:grid-cols-3">
-            <div className="rounded-xl border border-border bg-card/30 p-3">
-              <p className="text-xs opacity-60">Loaded on this page</p>
-              <p className="mt-1 text-xl font-semibold">{messages.length}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card/30 p-3">
-              <p className="text-xs opacity-60">Visible after filters</p>
-              <p className="mt-1 text-xl font-semibold">{visibleMessages.length}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card/30 p-3">
-              <p className="text-xs opacity-60">Total mailbox messages</p>
-              <p className="mt-1 text-xl font-semibold">{totalMessages}</p>
-            </div>
-          </div>
-
-          <div className="mb-4 grid gap-2 md:grid-cols-[1fr_auto_auto]">
-            <input
-              value={inboxSearch}
-              onChange={(e) => setInboxSearch(e.target.value)}
-              placeholder="Search by sender, subject, or snippet"
-              className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
-            />
-            <select
-              value={inboxSort}
-              onChange={(e) => setInboxSort(e.target.value as "newest" | "oldest" | "subject" | "sender")}
-              className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
-            >
-              <option value="newest">Newest first</option>
-              <option value="oldest">Oldest first</option>
-              <option value="subject">Subject A-Z</option>
-              <option value="sender">Sender A-Z</option>
-            </select>
-            <label className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm">
-              <input type="checkbox" checked={snippetOnly} onChange={(e) => setSnippetOnly(e.target.checked)} />
-              Snippet only
-            </label>
-          </div>
-
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="font-medium">Inbox ({messages.length}/{totalMessages})</h3>
-            <div className="flex gap-2 text-xs">
-              <button
-                onClick={() => {
-                  setInboxPage((prev) => Math.max(0, prev - 1));
-                }}
-                disabled={inboxPage === 0}
-                className="rounded-lg border border-border px-3 py-1 disabled:opacity-50"
-              >
-                ← Prev
-              </button>
-              <span className="px-2 py-1">Page {inboxPage + 1}</span>
-              <button
-                onClick={() => {
-                  setInboxPage((prev) => prev + 1);
-                }}
-                disabled={messages.length < 50}
-                className="rounded-lg border border-border px-3 py-1 disabled:opacity-50"
-              >
-                Next →
-              </button>
-            </div>
-          </div>
-          <ul className="max-h-[600px] space-y-2 overflow-y-auto">
-            {visibleMessages.map((msg) => (
-              <li
-                key={msg.id}
-                className="cursor-pointer rounded-xl border border-border p-3 transition hover:bg-accent/10"
-                onClick={() => openMessage(msg.id)}
-              >
-                <p className="truncate text-sm font-medium">{msg.subject || "(No subject)"}</p>
-                <p className="mt-1 text-xs opacity-60">{msg.from}</p>
-                <p className="mt-1 truncate text-xs opacity-50">{msg.snippet}</p>
-                <div className="mt-2 flex justify-end">
-                  <button
-                    className="rounded-lg border border-border px-3 py-1 text-xs transition hover:bg-red-500/20"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteMessage(msg.id);
-                    }}
+            {/* Message list */}
+            <ul className="max-h-[600px] space-y-2 overflow-y-auto">
+              {visibleList.map((msg) => {
+                const folderParam = activeFolder === "inbox" ? "INBOX" : sentFolderName;
+                return (
+                  <li
+                    key={msg.id}
+                    className="cursor-pointer rounded-xl border border-border p-3 transition hover:bg-accent/10"
+                    onClick={() => openMessage(msg.id, folderParam)}
                   >
-                    Delete
+                    <p className="truncate text-sm font-medium">{msg.subject || "(No subject)"}</p>
+                    <p className="mt-1 text-xs opacity-60">
+                      {activeFolder === "inbox" ? `From: ${msg.from}` : `To: ${msg.to}`}
+                    </p>
+                    <p className="mt-0.5 text-xs opacity-40">{msg.date}</p>
+                    {msg.snippet && <p className="mt-1 truncate text-xs opacity-50">{msg.snippet}</p>}
+                    <div className="mt-2 flex justify-end">
+                      <button
+                        className="rounded-lg border border-border px-3 py-1 text-xs transition hover:bg-red-500/20"
+                        onClick={(e) => { e.stopPropagation(); deleteMessage(msg.id, folderParam); }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+              {currentLoad && (
+                <li className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
+                  Loading {folderLabel.toLowerCase()}…
+                </li>
+              )}
+              {!currentLoad && visibleList.length === 0 && (
+                <li className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
+                  {config?.has_password ? `No messages in ${folderLabel}.` : "Configure your mailbox to load messages."}
+                </li>
+              )}
+            </ul>
+          </main>
+        </div>
+
+        {/* ── Compose modal ─────────────────────────────────────────── */}
+        {showCompose && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+            onClick={() => setShowCompose(false)}
+          >
+            <div
+              className="glass w-full max-w-2xl rounded-2xl p-6 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold">New Email</h3>
+                <button onClick={() => setShowCompose(false)} className="rounded-lg border border-border px-3 py-1 text-sm hover:bg-card/70">✕</button>
+              </div>
+              <div className="space-y-3">
+                <input
+                  className="w-full rounded-xl border border-border bg-transparent px-3 py-2"
+                  placeholder="To"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                />
+                <input
+                  className="w-full rounded-xl border border-border bg-transparent px-3 py-2"
+                  placeholder="Subject"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                />
+                <textarea
+                  className="h-48 w-full rounded-xl border border-border bg-transparent px-3 py-2"
+                  placeholder="Message"
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <button className="rounded-xl bg-accent/80 px-6 py-2 text-white hover:bg-accent" onClick={sendMail}>
+                    Send
+                  </button>
+                  <button className="rounded-xl border border-border px-4 py-2 hover:bg-card/70" onClick={() => { setTo(""); setSubject(""); setBody(""); }}>
+                    Clear
                   </button>
                 </div>
-              </li>
-            ))}
-            {loadingInbox && (
-              <li className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
-                Loading inbox...
-              </li>
-            )}
-            {!loadingInbox && visibleMessages.length === 0 && (
-              <li className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
-                No messages match this filter.
-              </li>
-            )}
-          </ul>
-        </section>
+              </div>
+            </div>
+          </div>
+        )}
 
-        {/* Mail Detail Modal */}
+        {/* ── Settings modal ────────────────────────────────────────── */}
+        {showSettings && (
+          <div
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-16 backdrop-blur-sm"
+            onClick={() => setShowSettings(false)}
+          >
+            <div
+              className="glass w-full max-w-2xl rounded-2xl p-6 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Mailbox Settings</h3>
+                <button onClick={() => setShowSettings(false)} className="rounded-lg border border-border px-3 py-1 text-sm hover:bg-card/70">✕</button>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <input className="rounded-xl border border-border bg-transparent px-3 py-2" placeholder="Email" value={config?.email || ""} onChange={(e) => setConfig((p) => p ? { ...p, email: e.target.value } : p)} />
+                <input className="rounded-xl border border-border bg-transparent px-3 py-2" placeholder="Username" value={config?.username || ""} onChange={(e) => setConfig((p) => p ? { ...p, username: e.target.value } : p)} />
+                <input className="rounded-xl border border-border bg-transparent px-3 py-2" placeholder="IMAP host" value={config?.imap_host || ""} onChange={(e) => setConfig((p) => p ? { ...p, imap_host: e.target.value } : p)} />
+                <input type="number" className="rounded-xl border border-border bg-transparent px-3 py-2" placeholder="IMAP port" value={config?.imap_port || 993} onChange={(e) => setConfig((p) => p ? { ...p, imap_port: Number(e.target.value) || 993 } : p)} />
+                <input className="rounded-xl border border-border bg-transparent px-3 py-2" placeholder="SMTP host" value={config?.smtp_host || ""} onChange={(e) => setConfig((p) => p ? { ...p, smtp_host: e.target.value } : p)} />
+                <input type="number" className="rounded-xl border border-border bg-transparent px-3 py-2" placeholder="SMTP port" value={config?.smtp_port || 587} onChange={(e) => setConfig((p) => p ? { ...p, smtp_port: Number(e.target.value) || 587 } : p)} />
+              </div>
+
+              <input
+                type="password"
+                className="mt-3 w-full rounded-xl border border-border bg-transparent px-3 py-2"
+                placeholder={config?.has_password ? "Leave blank to keep current password" : "Mailbox password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+
+              <div className="mt-3 flex flex-wrap gap-4 text-sm">
+                <label className="flex items-center gap-2"><input type="checkbox" checked={config?.imap_use_ssl ?? true} onChange={(e) => setConfig((p) => p ? { ...p, imap_use_ssl: e.target.checked } : p)} />IMAP SSL</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={config?.smtp_use_tls ?? true} onChange={(e) => setConfig((p) => p ? { ...p, smtp_use_tls: e.target.checked } : p)} />SMTP TLS</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={config?.smtp_use_ssl ?? false} onChange={(e) => setConfig((p) => p ? { ...p, smtp_use_ssl: e.target.checked } : p)} />SMTP SSL</label>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button className="rounded-xl bg-accent/80 px-4 py-2 text-white hover:bg-accent" onClick={saveConfig}>Save Settings</button>
+                <button className="rounded-xl border border-border px-4 py-2 hover:bg-card/70" onClick={testConnection}>Test Connection</button>
+              </div>
+
+              <div className="mt-6 border-t border-border pt-5">
+                <h4 className="mb-2 text-sm font-semibold">Email Signature</h4>
+                <textarea
+                  className="h-36 w-full rounded-xl border border-border bg-transparent px-3 py-2 font-mono text-xs"
+                  placeholder="HTML or plain text"
+                  value={emailSignature}
+                  onChange={(e) => setEmailSignature(e.target.value)}
+                />
+                <p className="mt-1 text-xs opacity-50">Auto-appended to every sent message.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Message detail modal ──────────────────────────────────── */}
         {selectedMessage && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
             onClick={closeMessage}
           >
             <div
-              className="glass max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl p-6"
+              className="glass max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl p-6 shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="mb-4 flex items-start justify-between">
-                <div className="flex-1">
-                  <h2 className="text-2xl font-bold">{selectedMessage.subject || "(No subject)"}</h2>
-                  <p className="mt-2 text-sm opacity-70">
-                    From: <span className="font-medium">{selectedMessage.from}</span>
-                  </p>
-                  <p className="text-sm opacity-70">
-                    To: <span className="font-medium">{selectedMessage.to}</span>
-                  </p>
+              <div className="mb-4 flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate text-2xl font-bold">{selectedMessage.subject || "(No subject)"}</h2>
+                  <p className="mt-2 text-sm opacity-70">From: <span className="font-medium">{selectedMessage.from}</span></p>
+                  <p className="text-sm opacity-70">To: <span className="font-medium">{selectedMessage.to}</span></p>
                   <p className="mt-1 text-xs opacity-50">{selectedMessage.date}</p>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    className="rounded-xl border border-border bg-card px-4 py-2 text-sm transition hover:bg-accent/20"
-                    onClick={() => setShowReply(!showReply)}
-                  >
-                    Reply
-                  </button>
-                  <button
-                    className="rounded-xl border border-border bg-card px-4 py-2 text-sm transition hover:bg-red-500/20"
-                    onClick={() => deleteMessage(selectedMessage.id)}
-                  >
+                <div className="flex shrink-0 gap-2">
+                  {activeFolder === "inbox" && (
+                    <button className="rounded-xl border border-border bg-card px-4 py-2 text-sm hover:bg-accent/20" onClick={() => setShowReply(!showReply)}>
+                      Reply
+                    </button>
+                  )}
+                  <button className="rounded-xl border border-border bg-card px-4 py-2 text-sm hover:bg-red-500/20" onClick={() => deleteMessage(selectedMessage.id, openedFromFolder)}>
                     Delete
                   </button>
-                  <button
-                    className="rounded-xl border border-border bg-card px-4 py-2 text-sm transition hover:bg-accent/10"
-                    onClick={closeMessage}
-                  >
+                  <button className="rounded-xl border border-border bg-card px-4 py-2 text-sm hover:bg-accent/10" onClick={closeMessage}>
                     Close
                   </button>
                 </div>
               </div>
 
-              <div className="mt-6 rounded-xl border border-border bg-white dark:bg-gray-900 overflow-hidden">
+              <div className="mt-4 overflow-hidden rounded-xl border border-border bg-white dark:bg-gray-900">
                 {emailHtmlUrl ? (
                   <iframe
                     src={emailHtmlUrl}
-                    className="w-full h-[600px] border-0"
+                    className="h-[600px] w-full border-0"
                     sandbox="allow-same-origin allow-popups"
                     title="Email content"
                   />
                 ) : selectedMessage.text_body ? (
-                  <pre className="whitespace-pre-wrap font-sans text-sm p-4 overflow-auto max-h-[600px]">{selectedMessage.text_body}</pre>
+                  <pre className="max-h-[600px] overflow-auto whitespace-pre-wrap p-4 font-sans text-sm">{selectedMessage.text_body}</pre>
                 ) : (
                   <p className="p-4 text-sm opacity-60">No content</p>
                 )}
               </div>
 
-              {/* Reply Form */}
               {showReply && (
-                <div className="mt-6 border-t border-border pt-6">
+                <div className="mt-6 border-t border-border pt-5">
                   <h4 className="mb-3 font-medium">Reply to {selectedMessage.from}</h4>
                   <textarea
                     className="h-40 w-full rounded-xl border border-border bg-transparent px-3 py-2"
-                    placeholder="Type your reply..."
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
+                    placeholder="Type your reply…"
+                    value={replyBody}
+                    onChange={(e) => setReplyBody(e.target.value)}
                   />
                   <div className="mt-3 flex gap-2">
-                    <button
-                      className="rounded-xl bg-accent/80 px-6 py-2 text-white transition hover:bg-accent"
-                      onClick={replyMail}
-                    >
-                      Send Reply
-                    </button>
-                    <button
-                      className="rounded-xl border border-border px-4 py-2 transition hover:bg-card/70"
-                      onClick={() => {
-                        setShowReply(false);
-                        setBody("");
-                      }}
-                    >
-                      Cancel
-                    </button>
+                    <button className="rounded-xl bg-accent/80 px-6 py-2 text-white hover:bg-accent" onClick={replyMail}>Send Reply</button>
+                    <button className="rounded-xl border border-border px-4 py-2 hover:bg-card/70" onClick={() => { setShowReply(false); setReplyBody(""); }}>Cancel</button>
                   </div>
                 </div>
               )}
@@ -663,10 +681,11 @@ export default function MailPage() {
           </div>
         )}
 
+        {/* ── Loading spinner ───────────────────────────────────────── */}
         {loadingDetail && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
             <div className="glass rounded-2xl p-6">
-              <p className="text-sm">Loading message...</p>
+              <p className="text-sm">Loading message…</p>
             </div>
           </div>
         )}
@@ -674,3 +693,4 @@ export default function MailPage() {
     </LayoutShell>
   );
 }
+
