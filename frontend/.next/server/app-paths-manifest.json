@@ -4,8 +4,8 @@
   "/dashboard/page": "app/dashboard/page.js",
   "/files/page": "app/files/page.js",
   "/login/page": "app/login/page.js",
+  "/page": "app/page.js",
   "/mail/page": "app/mail/page.js",
   "/register/page": "app/register/page.js",
-  "/page": "app/page.js",
   "/settings/page": "app/settings/page.js"
 }

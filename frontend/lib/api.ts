@@ -21,6 +21,27 @@ export function getApiBase() {
   return resolveApiBase();
 }
 
+async function extractErrorMessage(response: Response): Promise<string> {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    const payload = await response.json().catch(() => ({}));
+    if (typeof payload?.detail === "string" && payload.detail.trim()) {
+      return payload.detail;
+    }
+  } else {
+    const bodyText = await response.text().catch(() => "");
+    if (bodyText.trim()) {
+      const compactText = bodyText.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      if (compactText) {
+        return `${response.status} ${response.statusText}: ${compactText}`;
+      }
+    }
+  }
+
+  return `${response.status} ${response.statusText || "Request failed"}`;
+}
+
 function normalizeFetchError(error: unknown): Error {
   if (error instanceof TypeError && /fetch/i.test(error.message)) {
     return new Error("Cannot reach API server. Check backend URL, proxy routing, CORS, and that the API is running.");
@@ -136,8 +157,7 @@ export async function apiRaw(path: string, options?: RequestInit): Promise<Respo
   }
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.detail || "Request failed");
+    throw new Error(await extractErrorMessage(response));
   }
 
   return response;
@@ -199,8 +219,7 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.detail || "Request failed");
+    throw new Error(await extractErrorMessage(response));
   }
 
   return response.json() as Promise<T>;

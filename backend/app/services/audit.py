@@ -22,5 +22,8 @@ def log_event(
         ip_address=ip_address,
         user_agent=user_agent,
     )
-    db.add(row)
-    db.commit()
+    try:
+        db.add(row)
+        db.commit()
+    except Exception:
+        db.rollback()

@@ -4,8 +4,8 @@
   "/dashboard/page": "/dashboard",
   "/files/page": "/files",
   "/login/page": "/login",
+  "/page": "/",
   "/mail/page": "/mail",
   "/register/page": "/register",
-  "/page": "/",
   "/settings/page": "/settings"
 }
