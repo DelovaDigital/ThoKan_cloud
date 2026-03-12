@@ -3,7 +3,7 @@ function resolveApiBase() {
   const nativeBase = process.env.NEXT_PUBLIC_NATIVE_API_BASE_URL;
 
   if (typeof window !== "undefined" && window.location.protocol === "capacitor:") {
-    return nativeBase || configuredWebBase || "http://localhost:8000/api/v1";
+    return nativeBase || configuredWebBase || "https://thokan.cloud/api/v1";
   }
 
   if (configuredWebBase) {

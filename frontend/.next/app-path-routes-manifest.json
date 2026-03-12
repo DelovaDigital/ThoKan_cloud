@@ -3,9 +3,9 @@
   "/admin/page": "/admin",
   "/dashboard/page": "/dashboard",
   "/files/page": "/files",
-  "/login/page": "/login",
   "/page": "/",
-  "/mail/page": "/mail",
   "/register/page": "/register",
-  "/settings/page": "/settings"
+  "/mail/page": "/mail",
+  "/settings/page": "/settings",
+  "/login/page": "/login"
 }

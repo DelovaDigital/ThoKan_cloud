@@ -1,7 +1,7 @@
 {
   "version": 4,
   "routes": {
-    "/mail": {
+    "/": {
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -14,8 +14,32 @@
         }
       ],
       "initialRevalidateSeconds": false,
-      "srcRoute": "/mail",
-      "dataRoute": "/mail.rsc",
+      "srcRoute": "/",
+      "dataRoute": "/index.rsc",
+      "allowHeader": [
+        "host",
+        "x-matched-path",
+        "x-prerender-revalidate",
+        "x-prerender-revalidate-if-generated",
+        "x-next-revalidated-tags",
+        "x-next-revalidate-tag-token"
+      ]
+    },
+    "/admin": {
+      "experimentalBypassFor": [
+        {
+          "type": "header",
+          "key": "Next-Action"
+        },
+        {
+          "type": "header",
+          "key": "content-type",
+          "value": "multipart/form-data;.*"
+        }
+      ],
+      "initialRevalidateSeconds": false,
+      "srcRoute": "/admin",
+      "dataRoute": "/admin.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -73,7 +97,7 @@
         "x-next-revalidate-tag-token"
       ]
     },
-    "/admin": {
+    "/login": {
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -86,32 +110,8 @@
         }
       ],
       "initialRevalidateSeconds": false,
-      "srcRoute": "/admin",
-      "dataRoute": "/admin.rsc",
-      "allowHeader": [
-        "host",
-        "x-matched-path",
-        "x-prerender-revalidate",
-        "x-prerender-revalidate-if-generated",
-        "x-next-revalidated-tags",
-        "x-next-revalidate-tag-token"
-      ]
-    },
-    "/": {
-      "experimentalBypassFor": [
-        {
-          "type": "header",
-          "key": "Next-Action"
-        },
-        {
-          "type": "header",
-          "key": "content-type",
-          "value": "multipart/form-data;.*"
-        }
-      ],
-      "initialRevalidateSeconds": false,
-      "srcRoute": "/",
-      "dataRoute": "/index.rsc",
+      "srcRoute": "/login",
+      "dataRoute": "/login.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -145,7 +145,7 @@
         "x-next-revalidate-tag-token"
       ]
     },
-    "/login": {
+    "/mail": {
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -158,8 +158,8 @@
         }
       ],
       "initialRevalidateSeconds": false,
-      "srcRoute": "/login",
-      "dataRoute": "/login.rsc",
+      "srcRoute": "/mail",
+      "dataRoute": "/mail.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -197,8 +197,8 @@
   "dynamicRoutes": {},
   "notFoundRoutes": [],
   "preview": {
-    "previewModeId": "bbbc5220b9ec6678f785410f4601d049",
-    "previewModeSigningKey": "99844d7d2efb4bbacfaf49d96be95fa7558ae64be413004fa302bdf9482cc640",
-    "previewModeEncryptionKey": "cf4b0a54b8085e3ea5fb9db714cbe585bec01c0f05661bc279d2eceb1122ff84"
+    "previewModeId": "313c50bf251e01859009be5ffc2dd3f8",
+    "previewModeSigningKey": "92e2155fb10495d7cb80e4160844e0a2ce5d9e1be33d02d493e82c9662448cce",
+    "previewModeEncryptionKey": "c7e497ceb19f2ba06ca53b281864999d074c6da5843d988309b2a1ff79689b1e"
   }
 }
