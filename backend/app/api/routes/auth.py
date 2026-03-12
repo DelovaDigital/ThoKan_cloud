@@ -64,46 +64,54 @@ def register(payload: UserCreateRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == payload.email).first()
+    try:
+        user = db.query(User).filter(User.email == payload.email).first()
 
-    password_valid = False
-    if user:
-        try:
-            password_valid = verify_password(payload.password, user.password_hash)
-        except Exception:
-            if compare_digest(user.password_hash, payload.password):
-                user.password_hash = hash_password(payload.password)
-                password_valid = True
-                logger.warning("Migrated legacy plaintext password for user_id=%s", user.id)
-            else:
-                logger.warning("Invalid stored password hash for user_id=%s", user.id)
+        password_valid = False
+        if user:
+            try:
+                password_valid = verify_password(payload.password, user.password_hash)
+            except Exception:
+                stored_password = user.password_hash if isinstance(user.password_hash, str) else ""
+                if stored_password and compare_digest(stored_password, payload.password):
+                    user.password_hash = hash_password(payload.password)
+                    password_valid = True
+                    logger.warning("Migrated legacy plaintext password for user_id=%s", user.id)
+                else:
+                    logger.warning("Invalid stored password hash for user_id=%s", user.id)
 
-    if not user or not password_valid:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is disabled")
+        if not user or not password_valid:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        if not user.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is disabled")
 
-    if user.two_factor_enabled:
-        if not payload.totp_code or not user.two_factor_secret:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="2FA code required")
-        if not pyotp.TOTP(user.two_factor_secret).verify(payload.totp_code, valid_window=1):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid 2FA code")
+        if user.two_factor_enabled:
+            if not payload.totp_code or not user.two_factor_secret:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="2FA code required")
+            if not pyotp.TOTP(user.two_factor_secret).verify(payload.totp_code, valid_window=1):
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid 2FA code")
 
-    roles = get_user_roles(db, user.id)
-    access_token, access_expires_at = create_access_token(str(user.id), roles)
-    refresh_token, refresh_expires_at = create_refresh_token(str(user.id))
-    db.add(
-        RefreshToken(
-            user_id=user.id,
-            token_hash=hash_token(refresh_token),
-            expires_at=refresh_expires_at,
+        roles = get_user_roles(db, user.id)
+        access_token, access_expires_at = create_access_token(str(user.id), roles)
+        refresh_token, refresh_expires_at = create_refresh_token(str(user.id))
+        db.add(
+            RefreshToken(
+                user_id=user.id,
+                token_hash=hash_token(refresh_token),
+                expires_at=refresh_expires_at,
+            )
         )
-    )
-    user.last_login_at = datetime.now(timezone.utc)
-    db.commit()
+        user.last_login_at = datetime.now(timezone.utc)
+        db.commit()
 
-    log_event(db, "auth.login", actor_user_id=user.id, entity_type="user", entity_id=user.id)
-    return TokenResponse(access_token=access_token, refresh_token=refresh_token, expires_at=access_expires_at)
+        log_event(db, "auth.login", actor_user_id=user.id, entity_type="user", entity_id=user.id)
+        return TokenResponse(access_token=access_token, refresh_token=refresh_token, expires_at=access_expires_at)
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        logger.exception("Unexpected login failure for email=%s", payload.email)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Login failed")
 
 
 @router.post("/refresh", response_model=TokenResponse)
