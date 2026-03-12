@@ -1,4 +1,6 @@
+import logging
 from datetime import datetime, timedelta, timezone
+from secrets import compare_digest
 
 import pyotp
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -29,6 +31,7 @@ from app.services.audit import log_event
 from app.services.email import send_email
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/register", response_model=UserResponse)
@@ -62,7 +65,20 @@ def register(payload: UserCreateRequest, db: Session = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
-    if not user or not verify_password(payload.password, user.password_hash):
+
+    password_valid = False
+    if user:
+        try:
+            password_valid = verify_password(payload.password, user.password_hash)
+        except Exception:
+            if compare_digest(user.password_hash, payload.password):
+                user.password_hash = hash_password(payload.password)
+                password_valid = True
+                logger.warning("Migrated legacy plaintext password for user_id=%s", user.id)
+            else:
+                logger.warning("Invalid stored password hash for user_id=%s", user.id)
+
+    if not user or not password_valid:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is disabled")
