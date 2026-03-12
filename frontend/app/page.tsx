@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Cloud, FolderOpen, Mail, Settings, ShieldCheck, Sparkles } from "lucide-react";
+import { Cloud, FolderOpen, Mail, MessageSquareText, Settings, ShieldCheck, Sparkles } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ensureSession } from "@/lib/api";
 
@@ -20,6 +20,12 @@ const featureCards = [
     description: "Bekijk inbox en verzonden berichten in een gerichte interface met snellere navigatie.",
     href: "/mail",
     icon: Mail,
+  },
+  {
+    title: "Shopify chat",
+    description: "Volg Shopify orderevents in een centrale feed en zie sneller wanneer klantenactiviteit verandert.",
+    href: "/shopify",
+    icon: MessageSquareText,
   },
   {
     title: "Admin",
@@ -117,6 +123,9 @@ export default function HomePage() {
                   <Link href="/mail" className="rounded-2xl border border-border px-5 py-3 text-sm font-medium transition hover:bg-card/70">
                     Open postvak
                   </Link>
+                  <Link href="/shopify" className="rounded-2xl border border-border px-5 py-3 text-sm font-medium transition hover:bg-card/70">
+                    Open Shopify chat
+                  </Link>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="rounded-2xl border border-border/70 bg-card/50 p-4">
@@ -128,6 +137,11 @@ export default function HomePage() {
                     <p className="text-xs uppercase tracking-[0.18em] opacity-50">E-mail</p>
                     <p className="mt-2 text-lg font-semibold">Postvak IN + Verzonden</p>
                     <p className="mt-1 text-sm opacity-65">Eén plek om gesprekken te beheren en sneller te reageren.</p>
+                  </div>
+                  <div className="rounded-2xl border border-border/70 bg-card/50 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] opacity-50">Shopify</p>
+                    <p className="mt-2 text-lg font-semibold">Chat- en eventfeed</p>
+                    <p className="mt-1 text-sm opacity-65">Recente Shopify-orderupdates en klantactiviteit in één doorlopende stroom.</p>
                   </div>
                   <div className="rounded-2xl border border-border/70 bg-card/50 p-4">
                     <p className="text-xs uppercase tracking-[0.18em] opacity-50">Beheer</p>

@@ -3,6 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { LayoutShell } from "@/components/layout-shell";
 import { api } from "@/lib/api";
+import {
+  browserNotificationsSupported,
+  getBrowserNotificationPermission,
+  requestBrowserNotificationPermission,
+  sendBrowserNotification,
+} from "@/lib/browser-notifications";
 
 const DEFAULT_EMAIL_SIGNATURE = `<style>.thokan-logo-dark{display:none !important;}@media (prefers-color-scheme: dark){.thokan-logo-light{display:none !important;}.thokan-logo-dark{display:block !important;}}</style><div style="margin-top:16px;border-top:1px solid #d1d5db;padding-top:12px;font-family:Arial,sans-serif;font-size:13px;color:#111827;line-height:1.5;text-align:center;"><img class="thokan-logo-light" src="/Logo_tekst_CV.png" alt="ThoKan" style="display:block;margin:0 auto 10px auto;max-height:44px;width:auto;"><img class="thokan-logo-dark" src="/Logo_tekst_CV_white.png" alt="ThoKan" style="display:none;margin:0 auto 10px auto;max-height:44px;width:auto;"><div style="font-size:16px;font-weight:700;letter-spacing:0.3px;">ThoKan</div><div style="color:#374151;">BTW-nummer: 1034.077.111</div><div style="color:#374151;">Tel: 0475 50 67 03</div></div>`;
 
@@ -51,6 +57,9 @@ type MailDetail = {
 
 type ActiveFolder = "inbox" | "sent";
 type SortOrder = "newest" | "oldest" | "subject" | "sender";
+
+const MAIL_NOTIFICATION_STORAGE_KEY = "mail-last-message-id";
+const MAIL_POLL_INTERVAL_MS = 60_000;
 
 export default function MailPage() {
   // Config
@@ -103,9 +112,12 @@ export default function MailPage() {
 
   // Status
   const [statusMsg, setStatusMsg] = useState("");
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
 
   // ─── Initialise ───────────────────────────────────────────────────────────
   useEffect(() => {
+    setNotificationPermission(getBrowserNotificationPermission());
+
     api<MailConfig>("/mail/config")
       .then((data) => {
         setConfig(data);
@@ -127,6 +139,56 @@ export default function MailPage() {
     if (config?.has_password) loadInbox();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config?.has_password, inboxPage]);
+
+  useEffect(() => {
+    if (!config?.has_password) return;
+
+    const pollInboxForNotifications = async () => {
+      try {
+        const res = await api<{ messages: MailMessage[]; total: number }>("/mail/inbox?limit=50&skip=0");
+        const nextMessages = res.messages || [];
+        const latestMessageId = nextMessages[0]?.id;
+
+        if (activeFolder === "inbox" && inboxPage === 0) {
+          setMessages(nextMessages);
+          setTotalMessages(res.total || 0);
+        }
+
+        if (!latestMessageId) return;
+
+        const previousMessageId = localStorage.getItem(MAIL_NOTIFICATION_STORAGE_KEY);
+        if (!previousMessageId) {
+          localStorage.setItem(MAIL_NOTIFICATION_STORAGE_KEY, latestMessageId);
+          return;
+        }
+
+        if (previousMessageId === latestMessageId) {
+          return;
+        }
+
+        const unseenMessages = nextMessages.filter((message) => message.id !== previousMessageId);
+        const notifications = unseenMessages.slice(0, 3).reverse();
+
+        for (const message of notifications) {
+          sendBrowserNotification(`Nieuwe e-mail van ${message.from}`, {
+            body: message.subject || message.snippet || "Nieuw bericht ontvangen",
+            tag: `mail-${message.id}`,
+          });
+        }
+
+        localStorage.setItem(MAIL_NOTIFICATION_STORAGE_KEY, latestMessageId);
+      } catch {
+        // Keep the existing page state stable if background notification polling fails.
+      }
+    };
+
+    void pollInboxForNotifications();
+    const interval = window.setInterval(() => {
+      void pollInboxForNotifications();
+    }, MAIL_POLL_INTERVAL_MS);
+
+    return () => window.clearInterval(interval);
+  }, [activeFolder, config?.has_password, inboxPage]);
 
   useEffect(() => {
     if (config?.has_password && activeFolder === "sent") loadSent();
@@ -168,6 +230,11 @@ export default function MailPage() {
     } catch (err) {
       setStatusMsg(err instanceof Error ? err.message : "Test mislukt");
     }
+  }
+
+  async function enableNotifications() {
+    const permission = await requestBrowserNotificationPermission();
+    setNotificationPermission(permission);
   }
 
   // ─── Folder loads ─────────────────────────────────────────────────────────
@@ -361,6 +428,15 @@ export default function MailPage() {
         <div className="glass sticky top-3 z-20 flex items-center justify-between rounded-2xl p-4 backdrop-blur">
           <h2 className="text-xl font-semibold">Mailbox</h2>
           <div className="flex gap-2">
+            {browserNotificationsSupported() && notificationPermission !== "granted" && (
+              <button
+                onClick={() => void enableNotifications()}
+                className="rounded-xl border border-border px-4 py-2 transition hover:bg-card/70"
+                title="Browsermeldingen inschakelen"
+              >
+                🔔
+              </button>
+            )}
             <button
               onClick={() => { setTo(""); setSubject(""); setBody(""); setShowCompose(true); }}
               className="flex items-center gap-2 rounded-xl bg-accent/80 px-4 py-2 text-white transition hover:bg-accent"
@@ -389,6 +465,12 @@ export default function MailPage() {
           <div className="glass rounded-xl px-4 py-3 text-sm">
             <span>{statusMsg}</span>
             <button className="ml-3 opacity-50 hover:opacity-100" onClick={() => setStatusMsg("")}>✕</button>
+          </div>
+        )}
+
+        {browserNotificationsSupported() && notificationPermission === "granted" && (
+          <div className="glass rounded-xl px-4 py-3 text-sm opacity-75">
+            Browsermeldingen zijn actief voor nieuwe e-mail.
           </div>
         )}
 

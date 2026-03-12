@@ -1,7 +1,7 @@
 {
   "version": 4,
   "routes": {
-    "/admin": {
+    "/login": {
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -14,8 +14,8 @@
         }
       ],
       "initialRevalidateSeconds": false,
-      "srcRoute": "/admin",
-      "dataRoute": "/admin.rsc",
+      "srcRoute": "/login",
+      "dataRoute": "/login.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -49,6 +49,30 @@
         "x-next-revalidate-tag-token"
       ]
     },
+    "/": {
+      "experimentalBypassFor": [
+        {
+          "type": "header",
+          "key": "Next-Action"
+        },
+        {
+          "type": "header",
+          "key": "content-type",
+          "value": "multipart/form-data;.*"
+        }
+      ],
+      "initialRevalidateSeconds": false,
+      "srcRoute": "/",
+      "dataRoute": "/index.rsc",
+      "allowHeader": [
+        "host",
+        "x-matched-path",
+        "x-prerender-revalidate",
+        "x-prerender-revalidate-if-generated",
+        "x-next-revalidated-tags",
+        "x-next-revalidate-tag-token"
+      ]
+    },
     "/mail": {
       "experimentalBypassFor": [
         {
@@ -73,7 +97,7 @@
         "x-next-revalidate-tag-token"
       ]
     },
-    "/settings": {
+    "/shopify": {
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -86,32 +110,8 @@
         }
       ],
       "initialRevalidateSeconds": false,
-      "srcRoute": "/settings",
-      "dataRoute": "/settings.rsc",
-      "allowHeader": [
-        "host",
-        "x-matched-path",
-        "x-prerender-revalidate",
-        "x-prerender-revalidate-if-generated",
-        "x-next-revalidated-tags",
-        "x-next-revalidate-tag-token"
-      ]
-    },
-    "/login": {
-      "experimentalBypassFor": [
-        {
-          "type": "header",
-          "key": "Next-Action"
-        },
-        {
-          "type": "header",
-          "key": "content-type",
-          "value": "multipart/form-data;.*"
-        }
-      ],
-      "initialRevalidateSeconds": false,
-      "srcRoute": "/login",
-      "dataRoute": "/login.rsc",
+      "srcRoute": "/shopify",
+      "dataRoute": "/shopify.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -145,6 +145,30 @@
         "x-next-revalidate-tag-token"
       ]
     },
+    "/admin": {
+      "experimentalBypassFor": [
+        {
+          "type": "header",
+          "key": "Next-Action"
+        },
+        {
+          "type": "header",
+          "key": "content-type",
+          "value": "multipart/form-data;.*"
+        }
+      ],
+      "initialRevalidateSeconds": false,
+      "srcRoute": "/admin",
+      "dataRoute": "/admin.rsc",
+      "allowHeader": [
+        "host",
+        "x-matched-path",
+        "x-prerender-revalidate",
+        "x-prerender-revalidate-if-generated",
+        "x-next-revalidated-tags",
+        "x-next-revalidate-tag-token"
+      ]
+    },
     "/dashboard": {
       "experimentalBypassFor": [
         {
@@ -169,7 +193,7 @@
         "x-next-revalidate-tag-token"
       ]
     },
-    "/": {
+    "/settings": {
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -182,8 +206,8 @@
         }
       ],
       "initialRevalidateSeconds": false,
-      "srcRoute": "/",
-      "dataRoute": "/index.rsc",
+      "srcRoute": "/settings",
+      "dataRoute": "/settings.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -197,8 +221,8 @@
   "dynamicRoutes": {},
   "notFoundRoutes": [],
   "preview": {
-    "previewModeId": "891937df66615aa4d72791e0d2eb0c93",
-    "previewModeSigningKey": "c712e08a81c8e58cd36001cb31aee3453d2ae921067c061edebb771622eec5f0",
-    "previewModeEncryptionKey": "b95bf4f0d9fa4105390ee87aa1a72c50fd09f97ff312e4348674dc6a6b4f5983"
+    "previewModeId": "277d026ba4a7d3e9b4b390eaaafe4d49",
+    "previewModeSigningKey": "d7dc9f78815b15fd01026b55cf3362665fcc1d4eb0484b1a5231d9471008b439",
+    "previewModeEncryptionKey": "4173fe6c6beb09f26eff061c93815a190f7f40be8ea8d57471d4387148e96c81"
   }
 }

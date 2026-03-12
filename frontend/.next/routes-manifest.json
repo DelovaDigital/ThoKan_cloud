@@ -68,6 +68,12 @@
       "regex": "^/settings(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/settings(?:/)?$"
+    },
+    {
+      "page": "/shopify",
+      "regex": "^/shopify(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/shopify(?:/)?$"
     }
   ],
   "dataRoutes": [],

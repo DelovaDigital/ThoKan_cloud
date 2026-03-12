@@ -155,6 +155,55 @@ def _shopify_request(db: Session, user_id: str, raw: dict, path: str, params: di
     return response.json()
 
 
+def _map_order_summary(order: dict) -> dict:
+    customer = order.get("customer") or {}
+    full_name = " ".join(
+        part for part in [customer.get("first_name", ""), customer.get("last_name", "")] if part
+    ).strip()
+    return {
+        "id": str(order.get("id", "")),
+        "name": order.get("name") or "-",
+        "email": order.get("email") or customer.get("email") or "",
+        "customer_name": full_name,
+        "financial_status": order.get("financial_status") or "",
+        "fulfillment_status": order.get("fulfillment_status") or "unfulfilled",
+        "currency": order.get("currency") or "",
+        "total_price": order.get("total_price") or "0",
+        "created_at": order.get("created_at") or "",
+        "tags": order.get("tags") or "",
+        "cancelled_at": order.get("cancelled_at") or "",
+    }
+
+
+def _map_shopify_events(events: list[dict]) -> list[dict]:
+    mapped = []
+    for event in events:
+        message_parts = [
+            event.get("message"),
+            event.get("verb"),
+            event.get("body"),
+        ]
+        message = " - ".join([part for part in message_parts if part])
+        mapped.append(
+            {
+                "id": str(event.get("id", "")),
+                "created_at": event.get("created_at") or "",
+                "author": event.get("author") or event.get("app_title") or "Shopify",
+                "type": event.get("verb") or event.get("subject_type") or "event",
+                "message": message or "Geen extra details",
+            }
+        )
+
+    mapped.sort(key=lambda row: row.get("created_at") or "", reverse=True)
+    return mapped
+
+
+def _fetch_shopify_order_events(db: Session, user_id: str, raw: dict, order_id: str, limit: int = 100) -> list[dict]:
+    payload = _shopify_request(db, user_id, raw, f"orders/{order_id}/events.json", params={"limit": limit})
+    events = payload.get("events", []) or []
+    return _map_shopify_events(events)
+
+
 @router.get("/config")
 def get_shopify_config(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     raw = _get_raw_config(db, str(current_user.id)) or {}
@@ -267,33 +316,69 @@ def list_shopify_orders(
     try:
         payload = _shopify_request(db, str(current_user.id), raw, "orders.json", params=params)
         orders = payload.get("orders", [])
-        mapped = []
-        for order in orders:
-            customer = order.get("customer") or {}
-            full_name = " ".join(
-                part for part in [customer.get("first_name", ""), customer.get("last_name", "")] if part
-            ).strip()
-            mapped.append(
-                {
-                    "id": str(order.get("id", "")),
-                    "name": order.get("name") or "-",
-                    "email": order.get("email") or customer.get("email") or "",
-                    "customer_name": full_name,
-                    "financial_status": order.get("financial_status") or "",
-                    "fulfillment_status": order.get("fulfillment_status") or "unfulfilled",
-                    "currency": order.get("currency") or "",
-                    "total_price": order.get("total_price") or "0",
-                    "created_at": order.get("created_at") or "",
-                    "tags": order.get("tags") or "",
-                    "cancelled_at": order.get("cancelled_at") or "",
-                }
-            )
+        mapped = [_map_order_summary(order) for order in orders]
 
         return {"orders": mapped, "count": len(mapped)}
     except HTTPException:
         raise
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to load Shopify orders: {exc}") from exc
+
+
+@router.get("/chat/feed")
+def get_shopify_chat_feed(
+    limit_orders: int = Query(default=12, ge=1, le=50),
+    limit_events: int = Query(default=60, ge=1, le=200),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    raw = _get_raw_config(db, str(current_user.id))
+    if not raw:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shopify config not found")
+
+    params = {"status": "any", "limit": limit_orders, "order": "updated_at desc"}
+
+    try:
+        payload = _shopify_request(db, str(current_user.id), raw, "orders.json", params=params)
+        orders = payload.get("orders", []) or []
+        feed = []
+
+        for order in orders:
+            summary = _map_order_summary(order)
+            if not summary["id"]:
+                continue
+
+            try:
+                events = _fetch_shopify_order_events(db, str(current_user.id), raw, summary["id"], limit=25)
+            except HTTPException:
+                continue
+
+            for event in events:
+                feed.append(
+                    {
+                        **event,
+                        "order_id": summary["id"],
+                        "order_name": summary["name"],
+                        "customer_name": summary["customer_name"],
+                        "email": summary["email"],
+                        "financial_status": summary["financial_status"],
+                        "fulfillment_status": summary["fulfillment_status"],
+                        "total_price": summary["total_price"],
+                        "currency": summary["currency"],
+                    }
+                )
+
+        feed.sort(key=lambda row: row.get("created_at") or "", reverse=True)
+        limited_feed = feed[:limit_events]
+        return {
+            "events": limited_feed,
+            "count": len(limited_feed),
+            "orders_checked": len(orders),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to load Shopify chat feed: {exc}") from exc
 
 
 @router.get("/orders/{order_id}")
@@ -395,27 +480,7 @@ def get_shopify_order_events(order_id: str, current_user: User = Depends(get_cur
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shopify config not found")
 
     try:
-        payload = _shopify_request(db, str(current_user.id), raw, f"orders/{order_id}/events.json", params={"limit": 100})
-        events = payload.get("events", []) or []
-        mapped = []
-        for event in events:
-            message_parts = [
-                event.get("message"),
-                event.get("verb"),
-                event.get("body"),
-            ]
-            message = " - ".join([part for part in message_parts if part])
-            mapped.append(
-                {
-                    "id": str(event.get("id", "")),
-                    "created_at": event.get("created_at") or "",
-                    "author": event.get("author") or event.get("app_title") or "Shopify",
-                    "type": event.get("verb") or event.get("subject_type") or "event",
-                    "message": message or "Geen extra details",
-                }
-            )
-
-        mapped.sort(key=lambda row: row.get("created_at") or "", reverse=True)
+        mapped = _fetch_shopify_order_events(db, str(current_user.id), raw, order_id, limit=100)
         return {"events": mapped, "count": len(mapped)}
     except HTTPException:
         raise

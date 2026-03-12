@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Capacitor } from "@capacitor/core";
-import { ChevronRight, Folder, LayoutGrid, LogOut, Mail, Settings, Shield, Sparkles } from "lucide-react";
+import { ChevronRight, Folder, LayoutGrid, LogOut, Mail, MessageSquareText, Settings, Shield, Sparkles } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ensureSession } from "@/lib/api";
 
 const items = [
   { href: "/dashboard", label: "Overzicht", icon: LayoutGrid },
   { href: "/files", label: "Bestanden", icon: Folder },
+  { href: "/shopify", label: "Shopify chat", icon: MessageSquareText },
   { href: "/mail", label: "E-mail", icon: Mail },
   { href: "/admin", label: "Admin", icon: Shield },
   { href: "/settings", label: "Instellingen", icon: Settings },
@@ -66,7 +67,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
         <main className="relative px-3 py-3">{children}</main>
 
         <nav className="bottom-safe-lift fixed inset-x-3 z-30 rounded-[1.75rem] border border-border/60 bg-card/90 p-2 shadow-glass backdrop-blur-md">
-          <div className="grid grid-cols-5 gap-1">
+          <div className="grid grid-cols-6 gap-1">
             {items.map((item) => {
               const active = pathname.startsWith(item.href);
               const Icon = item.icon;
