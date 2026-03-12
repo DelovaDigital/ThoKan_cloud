@@ -142,9 +142,8 @@ def _save_update_config(db: Session, payload: dict) -> dict:
     row = db.query(SystemSetting).filter(SystemSetting.key == UPDATE_CONFIG_KEY).first()
     if row:
         row.value = cfg
-        row.category = "system"
     else:
-        row = SystemSetting(key=UPDATE_CONFIG_KEY, value=cfg, category="system")
+        row = SystemSetting(key=UPDATE_CONFIG_KEY, value=cfg)
         db.add(row)
     db.commit()
     return cfg
@@ -367,9 +366,8 @@ def _save_update_status(db: Session, payload: dict) -> None:
     row = db.query(SystemSetting).filter(SystemSetting.key == UPDATE_STATUS_KEY).first()
     if row:
         row.value = payload
-        row.category = "system"
     else:
-        row = SystemSetting(key=UPDATE_STATUS_KEY, value=payload, category="system")
+        row = SystemSetting(key=UPDATE_STATUS_KEY, value=payload)
         db.add(row)
     db.commit()
 
@@ -473,7 +471,7 @@ def update_storage_path(
     if setting:
         setting.value = payload.new_path
     else:
-        setting = SystemSetting(key="storage_path", value=payload.new_path, category="system")
+        setting = SystemSetting(key="storage_path", value=payload.new_path)
         db.add(setting)
     db.commit()
 
