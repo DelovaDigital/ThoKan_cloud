@@ -23,6 +23,10 @@ from app.models import SystemSetting, User
 router = APIRouter()
 UPDATE_STATUS_KEY = "system_update_last_status"
 UPDATE_CONFIG_KEY = "system_update_config"
+DEFAULT_GITHUB_UPDATE_REPO = "AlessioD200/ThoKan_cloud"
+DEFAULT_GITHUB_UPDATE_BRANCH = "update-channel"
+TARGET_INSTALL_ROOT = Path("/opt/thokan-cloud")
+PRODUCTION_DOCKER_UPDATE_COMMAND = "sudo docker compose -f docker-compose.prod.yml up -d --build"
 
 
 class StorageInfo(BaseModel):
@@ -80,11 +84,11 @@ class ApplyUpdateRequest(BaseModel):
 
 class UpdateConfig(BaseModel):
     selected_channel: str = "stable"
-    stable_source_url: str = ""
-    beta_source_url: str = ""
+    stable_source_url: str = f"https://raw.githubusercontent.com/{DEFAULT_GITHUB_UPDATE_REPO}/{DEFAULT_GITHUB_UPDATE_BRANCH}/stable/latest.json"
+    beta_source_url: str = f"https://raw.githubusercontent.com/{DEFAULT_GITHUB_UPDATE_REPO}/{DEFAULT_GITHUB_UPDATE_BRANCH}/beta/latest.json"
     auto_rebuild_docker: bool = True
     auto_update_ubuntu: bool = True
-    docker_update_command: str = "docker compose up -d --build"
+    docker_update_command: str = PRODUCTION_DOCKER_UPDATE_COMMAND
     ubuntu_update_command: str = "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade"
 
 
@@ -123,21 +127,24 @@ def _default_update_config() -> dict:
     return UpdateConfig().model_dump()
 
 
+def _normalize_update_config(raw: dict | None) -> dict:
+    cfg = _default_update_config()
+    if isinstance(raw, dict):
+        cfg.update(raw)
+    cfg["selected_channel"] = _normalize_channel(str(cfg.get("selected_channel") or "stable"))
+    cfg["docker_update_command"] = PRODUCTION_DOCKER_UPDATE_COMMAND
+    return cfg
+
+
 def _load_update_config(db: Session) -> dict:
     row = db.query(SystemSetting).filter(SystemSetting.key == UPDATE_CONFIG_KEY).first()
     if not row or not isinstance(row.value, dict):
         return _default_update_config()
-
-    cfg = _default_update_config()
-    cfg.update(row.value)
-    cfg["selected_channel"] = _normalize_channel(str(cfg.get("selected_channel") or "stable"))
-    return cfg
+    return _normalize_update_config(row.value)
 
 
 def _save_update_config(db: Session, payload: dict) -> dict:
-    cfg = _default_update_config()
-    cfg.update(payload)
-    cfg["selected_channel"] = _normalize_channel(str(cfg.get("selected_channel") or "stable"))
+    cfg = _normalize_update_config(payload)
 
     row = db.query(SystemSetting).filter(SystemSetting.key == UPDATE_CONFIG_KEY).first()
     if row:
@@ -197,6 +204,21 @@ def _run_shell_command(command: str, timeout_seconds: int = 3600) -> subprocess.
         capture_output=True,
         text=True,
         timeout=timeout_seconds,
+    )
+
+
+def _run_shell_command_in_root(command: str, timeout_seconds: int = 3600) -> subprocess.CompletedProcess[str]:
+    if not TARGET_INSTALL_ROOT.exists():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Target install root not found: {TARGET_INSTALL_ROOT}",
+        )
+    return subprocess.run(
+        ["bash", "-lc", command],
+        capture_output=True,
+        text=True,
+        timeout=timeout_seconds,
+        cwd=str(TARGET_INSTALL_ROOT),
     )
 
 
@@ -347,13 +369,10 @@ def restart_docker_after_update(
 ):
     """Run the production docker-compose rebuild command. Returns the command output."""
     cfg = _load_update_config(db)
-    # Prefer configured command but ensure uses prod compose file
-    docker_cmd = f"sudo {str(cfg.get('docker_update_command') or 'docker compose up -d --build')} -f docker-compose.prod.yml"
+    docker_cmd = str(cfg.get("docker_update_command") or PRODUCTION_DOCKER_UPDATE_COMMAND)
 
-    # However the config value may already include compose flags; prefer explicit target
-    # Run command from repo root
     try:
-        result = _run_shell_command(docker_cmd, timeout_seconds=3600)
+        result = _run_shell_command_in_root(docker_cmd, timeout_seconds=3600)
         return {
             "return_code": result.returncode,
             "stdout": (result.stdout or "")[-20000:],
@@ -694,8 +713,8 @@ def apply_update_package(
             post_stderr: list[str] = []
 
             if result.returncode == 0 and not payload.dry_run and auto_rebuild_docker:
-                docker_command = str(cfg.get("docker_update_command") or "docker compose up -d --build")
-                docker_result = _run_shell_command(docker_command)
+                docker_command = str(cfg.get("docker_update_command") or PRODUCTION_DOCKER_UPDATE_COMMAND)
+                docker_result = _run_shell_command_in_root(docker_command)
                 post_stdout.append(f"\n[Docker rebuild]\n{docker_result.stdout or ''}")
                 post_stderr.append(f"\n[Docker rebuild]\n{docker_result.stderr or ''}")
                 if docker_result.returncode != 0:

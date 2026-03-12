@@ -87,12 +87,19 @@ cp /etc/letsencrypt/live/yourdomain.com/privkey.pem docker/ssl/key.pem
 5. Deploy:
 
 ```bash
-docker-compose -f docker-compose.prod.yml up -d --build
+sudo docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 ## Update Channels (Stable/Beta)
 
-The platform supports two update channels with one-click server updates from your own update host (no GitHub dependency), including optional automatic Docker rebuild and Ubuntu package updates.
+The platform supports two update channels with one-click server updates from GitHub-hosted manifests/packages or your own update host, including optional automatic Docker rebuild and Ubuntu package updates.
+
+Default GitHub manifest URLs:
+
+- `https://raw.githubusercontent.com/AlessioD200/ThoKan_cloud/update-channel/stable/latest.json`
+- `https://raw.githubusercontent.com/AlessioD200/ThoKan_cloud/update-channel/beta/latest.json`
+
+The repository includes a GitHub Actions workflow that publishes a new update package to the `update-channel` branch on every push to `main`.
 
 - Setup guide: [docs/update-channels.md](docs/update-channels.md)
 - Example files: [scripts/update_templates](scripts/update_templates)

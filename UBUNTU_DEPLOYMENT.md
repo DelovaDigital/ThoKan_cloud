@@ -226,8 +226,10 @@ docker compose logs -f frontend   # Alleen frontend
 ```bash
 git pull                           # Haal nieuwe code op
 docker compose down                # Stop containers
-docker compose up -d --build       # Herbouw en herstart
+sudo docker compose -f docker-compose.prod.yml up -d --build
 ```
+
+De ingebouwde updatefunctie in Cloud draait na een succesvolle update exact hetzelfde productiecommando.
 
 ### Backup database
 

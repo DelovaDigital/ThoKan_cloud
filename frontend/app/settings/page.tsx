@@ -283,33 +283,39 @@ export default function SettingsPage() {
     setFetchBusy(true);
     setStatus("");
     try {
-      const result = await api<UpdateStatus>("/system/update/fetch-and-apply-github", {
+      const result = await api<UpdatePackage>("/system/update/fetch-latest", {
         method: "POST",
         body: JSON.stringify({
-          repo_url: "https://github.com/AlessioD200/ThoKan_cloud",
-          branch: "main",
           channel: updateChannel,
-          dry_run: dryRun,
         }),
       });
-      setUpdateStatus(result);
-      setStatus(result.state === "success" ? "Laatste update toegepast" : "Update mislukt");
+      setSelectedPackage(result.name);
+      setStatus(`Laatste ${updateChannel}-update gedownload: ${result.name}`);
       await loadUpdateData();
 
-      if (result.state === "success") {
-        const restart = window.confirm("Update is toegepast. Wil je de server nu herstarten?");
-        if (restart) {
-          setStatus("Herstarten...");
-          try {
-            const restartRes = await api<{ return_code: number; stdout: string; stderr: string }>(
-              "/system/update/restart",
-              { method: "POST" },
-            );
-            setStatus(restartRes.return_code === 0 ? "Herstart voltooid" : "Herstart mislukt");
-          } catch (err) {
-            setStatus(err instanceof Error ? err.message : "Herstart mislukt");
-          }
+      const shouldApply = window.confirm(`Pakket ${result.name} is gedownload. Nu installeren?`);
+      if (shouldApply) {
+        setUpdateBusy(true);
+        try {
+          const applied = await api<UpdateStatus>("/system/update/apply", {
+            method: "POST",
+            body: JSON.stringify({
+              package_name: result.name,
+              channel: updateChannel,
+              script_name: "update.sh",
+              dry_run: dryRun,
+              auto_rebuild_docker: updateConfig?.auto_rebuild_docker,
+              auto_update_ubuntu: updateConfig?.auto_update_ubuntu,
+            }),
+          });
+          setUpdateStatus(applied);
+          setStatus(applied.state === "success" ? "Update voltooid" : "Update mislukt");
+          await loadUpdateData();
+        } catch (err) {
+          setStatus(err instanceof Error ? err.message : "Update mislukt");
+          await loadUpdateData();
         }
+        setUpdateBusy(false);
       }
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Laatste update ophalen mislukt");
@@ -1108,14 +1114,14 @@ Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
           icon={<PackageCheck className="h-5 w-5" />}
           eyebrow="Updates"
           title="Systeemupdates"
-          description="Voer stable- of beta-updates uit vanuit je eigen bron met heldere controles voor ophalen, uploaden en toepassen."
+          description="Controleer GitHub-gepubliceerde stable- of beta-updates, download ze naar de server en installeer ze gecontroleerd."
           aside={
             <div className={`rounded-full px-3 py-1 text-xs font-medium ${getUpdateStateTone(updateStatus?.state)}`}>
               {updateStatus?.state || "inactief"}
             </div>
           }
         >
-              <p className="mt-1 text-sm opacity-60">Gebruik stabiele of beta-kanaalupdates zonder GitHub-koppeling, direct vanaf je eigen updatebron.</p>
+              <p className="mt-1 text-sm opacity-60">Na een push naar GitHub publiceert de update-workflow een pakket en manifest. Cloud downloadt dat pakket hier en draait na installatie altijd de productie-herbouw.</p>
 
           <div className="mt-4 grid gap-3 rounded-[1.5rem] border border-border bg-card/30 p-4 md:grid-cols-2">
             <div>
@@ -1143,10 +1149,10 @@ Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
                       : { ...prev, beta_source_url: value };
                   });
                 }}
-                placeholder="https://updates.example.com/stable/latest.json"
+                placeholder="https://raw.githubusercontent.com/AlessioD200/ThoKan_cloud/update-channel/stable/latest.json"
                 className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
               />
-              <p className="mt-1 text-xs opacity-60">Ondersteunt direct archive URL (.zip/.tar/.tar.gz/.tgz) of manifest .json met package_url.</p>
+              <p className="mt-1 text-xs opacity-60">Ondersteunt direct archive URL (.zip/.tar/.tar.gz/.tgz) of manifest .json met package_url. De standaardworkflow publiceert naar de GitHub branch update-channel.</p>
             </div>
             <label className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
               <input
@@ -1178,10 +1184,12 @@ Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
                 className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-2 text-sm font-medium transition hover:bg-accent/10 disabled:opacity-50"
               >
                 <ArrowUpRight className="h-4 w-4" />
-                {fetchBusy ? "Ophalen..." : `Laatste ${updateChannel} ophalen`}
+                {fetchBusy ? "Downloaden..." : `Laatste ${updateChannel} downloaden`}
               </button>
             </div>
           </div>
+
+          <p className="mt-3 text-xs opacity-60">Vaste nabehandeling na een succesvolle update: sudo docker compose -f docker-compose.prod.yml up -d --build</p>
 
           <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
             <input

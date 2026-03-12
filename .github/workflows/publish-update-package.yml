@@ -1,0 +1,81 @@
+name: Publish Update Package
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Update channel
+        required: true
+        default: stable
+        type: choice
+        options:
+          - stable
+          - beta
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Determine channel and version
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            channel="${{ inputs.channel }}"
+          else
+            channel="stable"
+          fi
+          short_sha="${GITHUB_SHA::7}"
+          timestamp="$(date -u +%Y%m%d%H%M%S)"
+          version="${timestamp}-${short_sha}"
+          echo "channel=${channel}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "base_url=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/update-channel" >> "$GITHUB_OUTPUT"
+
+      - name: Build update package
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_path="$(python scripts/build_update_package.py \
+            --channel "${{ steps.meta.outputs.channel }}" \
+            --version "${{ steps.meta.outputs.version }}" \
+            --output-dir dist/updates)"
+          echo "package_path=${package_path}" >> "$GITHUB_OUTPUT"
+
+      - name: Create manifest and publish tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .publish
+          python scripts/publish_update.py \
+            --channel "${{ steps.meta.outputs.channel }}" \
+            --version "${{ steps.meta.outputs.version }}" \
+            --package "${{ steps.build.outputs.package_path }}" \
+            --root "$GITHUB_WORKSPACE/.publish" \
+            --base-url "${{ steps.meta.outputs.base_url }}" \
+            --notes "Commit ${GITHUB_SHA}"
+
+      - name: Publish update branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./.publish
+          publish_branch: update-channel
+          keep_files: true
+          force_orphan: false

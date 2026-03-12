@@ -1,6 +1,6 @@
 # Update Channels (Stable + Beta)
 
-Deze setup laat je updates binnenhalen zonder GitHub. Je gebruikt je eigen update server (HTTP/HTTPS) met 2 kanalen: `stable` en `beta`.
+Deze setup laat je updates binnenhalen vanaf GitHub of vanaf je eigen update server (HTTP/HTTPS) met 2 kanalen: `stable` en `beta`.
 
 ## 1) Wat de app nu ondersteunt
 
@@ -12,8 +12,21 @@ Deze setup laat je updates binnenhalen zonder GitHub. Je gebruikt je eigen updat
 - Eén klik op **Fetch latest** haalt package binnen op de server
 - Eén klik op **Apply update** voert `update.sh` uit
 - Na succesvolle update:
-  - Automatische Docker rebuild/redeploy
+  - Automatische Docker rebuild/redeploy met `sudo docker compose -f docker-compose.prod.yml up -d --build`
   - Automatische Ubuntu updates
+
+## 1b) GitHub push workflow
+
+De repository bevat een workflow op [.github/workflows/publish-update-package.yml](../.github/workflows/publish-update-package.yml).
+
+- Elke push naar `main` publiceert automatisch een `stable` package
+- Handmatig kun je ook een `beta` package publiceren via `workflow_dispatch`
+- De workflow schrijft package + `latest.json` naar de branch `update-channel`
+
+Standaard manifest URLs:
+
+- `https://raw.githubusercontent.com/AlessioD200/ThoKan_cloud/update-channel/stable/latest.json`
+- `https://raw.githubusercontent.com/AlessioD200/ThoKan_cloud/update-channel/beta/latest.json`
 
 ## 2) Voorbeeldbestanden
 
@@ -82,6 +95,7 @@ Gebruik [scripts/publish_update.py](../scripts/publish_update.py) om tegelijk:
 Voor publicatie + live controle (manifest/package bereikbaar):
 
 - [scripts/publish_and_verify_update.py](../scripts/publish_and_verify_update.py)
+- [scripts/build_update_package.py](../scripts/build_update_package.py)
 
 ## 7) Praktische hostingoptie
 
