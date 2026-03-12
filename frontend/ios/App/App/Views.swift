@@ -157,12 +157,12 @@ struct ShopifyTab: View {
         NavigationStack {
             Group {
                 if viewModel.isLoading {
-                    ProgressView("Loading Shopify chat...")
+                    ProgressView("Loading Shopify feed...")
                 } else if viewModel.events.isEmpty {
                     ContentUnavailableView(
                         "No Shopify events",
                         systemImage: "message",
-                        description: Text("Connect Shopify and refresh to see recent order activity.")
+                        description: Text("Connect Shopify and refresh to see recent order activity. Shopify Inbox conversations are not exposed through this API route.")
                     )
                 } else {
                     List(viewModel.events, id: \.id) { event in
@@ -432,7 +432,7 @@ struct SettingsTab: View {
 
                 Section("Notifications") {
                     Toggle("New mail notifications", isOn: $mailNotificationsEnabled)
-                    Toggle("New Shopify chat notifications", isOn: $shopifyNotificationsEnabled)
+                    Toggle("New Shopify event notifications", isOn: $shopifyNotificationsEnabled)
 
                     Text("Notifications are checked automatically while the app is open.")
                         .font(.footnote)

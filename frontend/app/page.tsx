@@ -22,8 +22,8 @@ const featureCards = [
     icon: Mail,
   },
   {
-    title: "Shopify chat",
-    description: "Volg Shopify orderevents in een centrale feed en zie sneller wanneer klantenactiviteit verandert.",
+    title: "Shopify feed",
+    description: "Volg Shopify orderevents in een centrale feed en zie sneller wanneer bestellingactiviteit verandert.",
     href: "/shopify",
     icon: MessageSquareText,
   },
@@ -124,7 +124,7 @@ export default function HomePage() {
                     Open postvak
                   </Link>
                   <Link href="/shopify" className="rounded-2xl border border-border px-5 py-3 text-sm font-medium transition hover:bg-card/70">
-                    Open Shopify chat
+                    Open Shopify feed
                   </Link>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
@@ -140,7 +140,7 @@ export default function HomePage() {
                   </div>
                   <div className="rounded-2xl border border-border/70 bg-card/50 p-4">
                     <p className="text-xs uppercase tracking-[0.18em] opacity-50">Shopify</p>
-                    <p className="mt-2 text-lg font-semibold">Chat- en eventfeed</p>
+                    <p className="mt-2 text-lg font-semibold">Eventfeed</p>
                     <p className="mt-1 text-sm opacity-65">Recente Shopify-orderupdates en klantactiviteit in één doorlopende stroom.</p>
                   </div>
                   <div className="rounded-2xl border border-border/70 bg-card/50 p-4">

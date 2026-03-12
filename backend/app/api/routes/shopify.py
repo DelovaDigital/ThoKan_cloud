@@ -155,6 +155,30 @@ def _shopify_request(db: Session, user_id: str, raw: dict, path: str, params: di
     return response.json()
 
 
+def _shopify_access_scopes(db: Session, user_id: str, raw: dict) -> list[str]:
+    store_domain = _normalize_store_domain(raw.get("store_domain") or "")
+    access_token = _resolve_access_token(db, user_id, raw, store_domain)
+
+    if not store_domain or not access_token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incomplete Shopify configuration")
+
+    url = f"https://{store_domain}/admin/oauth/access_scopes.json"
+    headers = {"X-Shopify-Access-Token": access_token, "Content-Type": "application/json"}
+
+    with httpx.Client(timeout=20.0) as client:
+        response = client.get(url, headers=headers)
+
+    if response.status_code >= 400:
+        detail = response.text[:400]
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Shopify scope lookup failed ({response.status_code}): {detail}",
+        )
+
+    payload = response.json()
+    return [scope.get("handle", "") for scope in (payload.get("access_scopes") or []) if scope.get("handle")]
+
+
 def _map_order_summary(order: dict) -> dict:
     customer = order.get("customer") or {}
     full_name = " ".join(
@@ -298,6 +322,30 @@ def test_shopify_connection(current_user: User = Depends(get_current_user), db: 
         raise
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Connection failed: {exc}") from exc
+
+
+@router.get("/capabilities")
+def get_shopify_capabilities(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    raw = _get_raw_config(db, str(current_user.id))
+    if not raw:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shopify config not found")
+
+    try:
+        scopes = _shopify_access_scopes(db, str(current_user.id), raw)
+        return {
+            "store_domain": _normalize_store_domain(raw.get("store_domain") or ""),
+            "granted_scopes": scopes,
+            "supports_order_events": True,
+            "supports_inbox_chat": False,
+            "inbox_chat_reason": (
+                "Shopify's published Admin API exposes access scopes and order events, but not Shopify Inbox "
+                "conversation or message endpoints for this integration path."
+            ),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to load Shopify capabilities: {exc}") from exc
 
 
 @router.get("/orders")

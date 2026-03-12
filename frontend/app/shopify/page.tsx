@@ -78,7 +78,7 @@ export default function ShopifyPage() {
     } catch (err) {
       setEvents([]);
       setOrdersChecked(0);
-      setError(err instanceof Error ? err.message : "Shopify chat laden mislukt");
+      setError(err instanceof Error ? err.message : "Shopify feed laden mislukt");
     }
 
     setLoading(false);
@@ -102,7 +102,7 @@ export default function ShopifyPage() {
     const unseenEvents = nextEvents.filter((event) => event.id !== previousEventId);
     const notifications = unseenEvents.slice(0, 3).reverse();
     for (const event of notifications) {
-      sendBrowserNotification(`Nieuwe Shopify chat: ${event.order_name}`, {
+      sendBrowserNotification(`Nieuw Shopify event: ${event.order_name}`, {
         body: `${event.author}: ${event.message}`,
         tag: `shopify-chat-${event.id}`,
       });
@@ -144,11 +144,11 @@ export default function ShopifyPage() {
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/40 px-3 py-1 text-xs font-medium opacity-80">
                 <MessageSquareText className="h-3.5 w-3.5 text-accent" />
-                Shopify chat feed
+                Shopify eventfeed
               </div>
-              <h1 className="mt-4 text-3xl font-semibold sm:text-4xl">Shopify gesprekken en events</h1>
+              <h1 className="mt-4 text-3xl font-semibold sm:text-4xl">Shopify events en orderactiviteit</h1>
               <p className="mt-3 max-w-3xl text-sm opacity-70 sm:text-base">
-                Deze feed bundelt recente Shopify-ordergebeurtenissen tot één chatachtige stroom. Nieuwe events kunnen ook als browsermelding binnenkomen.
+                Deze feed bundelt recente Shopify-ordergebeurtenissen tot één stroom. Shopify Inbox-conversaties zijn via deze Admin API-integratie niet beschikbaar, dus hier zie je order-events in plaats van echte Inbox-chats.
               </p>
               <div className="mt-5 flex flex-wrap gap-3">
                 <button
@@ -185,7 +185,7 @@ export default function ShopifyPage() {
               <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Meldingen</p>
                 <p className="mt-2 text-2xl font-semibold">{notificationPermission === "granted" ? "Aan" : "Uit"}</p>
-                <p className="mt-1 text-sm opacity-60">Browserstatus voor Shopify chat</p>
+                <p className="mt-1 text-sm opacity-60">Browserstatus voor Shopify events</p>
               </div>
               <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Polling</p>
@@ -226,7 +226,7 @@ export default function ShopifyPage() {
           <div className="mt-5 space-y-3">
             {loading ? (
               <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
-                Shopify chat laden...
+                Shopify feed laden...
               </div>
             ) : visibleEvents.length > 0 ? (
               visibleEvents.map((event) => (
@@ -257,7 +257,7 @@ export default function ShopifyPage() {
               ))
             ) : (
               <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
-                Geen Shopify-chatitems gevonden. Controleer Shopify-configuratie of probeer later opnieuw.
+                Geen Shopify-events gevonden. Controleer Shopify-configuratie of probeer later opnieuw.
               </div>
             )}
           </div>
@@ -265,7 +265,7 @@ export default function ShopifyPage() {
           {browserNotificationsSupported() && notificationPermission === "granted" && (
             <div className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-border bg-card/30 px-4 py-2 text-sm opacity-75">
               <BellRing className="h-4 w-4 text-accent" />
-              Browsermeldingen zijn actief voor nieuwe Shopify chat-events.
+              Browsermeldingen zijn actief voor nieuwe Shopify-events.
             </div>
           )}
         </section>

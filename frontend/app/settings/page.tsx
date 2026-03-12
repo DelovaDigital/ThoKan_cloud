@@ -80,6 +80,14 @@ type ShopifyConfig = {
   is_global?: boolean;
 };
 
+type ShopifyCapabilities = {
+  store_domain: string;
+  granted_scopes: string[];
+  supports_order_events: boolean;
+  supports_inbox_chat: boolean;
+  inbox_chat_reason: string;
+};
+
 type GelatoConfig = {
   base_url: string;
   has_api_key: boolean;
@@ -168,6 +176,7 @@ export default function SettingsPage() {
   const [shopifyHasClientCredentials, setShopifyHasClientCredentials] = useState(false);
   const [shopifyIsGlobal, setShopifyIsGlobal] = useState(false);
   const [shopifyApplyToAll, setShopifyApplyToAll] = useState(false);
+  const [shopifyCapabilities, setShopifyCapabilities] = useState<ShopifyCapabilities | null>(null);
   const [shopifyBusy, setShopifyBusy] = useState(false);
   const [shopifyTestStatus, setShopifyTestStatus] = useState("");
   const [testShopifyBusy, setTestShopifyBusy] = useState(false);
@@ -187,6 +196,7 @@ export default function SettingsPage() {
     loadUpdateData();
     loadUpdateConfig();
     loadShopifyConfig();
+    loadShopifyCapabilities();
     loadGelatoConfig();
     loadCurrentUser();
   }, []);
@@ -334,6 +344,15 @@ export default function SettingsPage() {
     }
   }
 
+  async function loadShopifyCapabilities() {
+    try {
+      const data = await api<ShopifyCapabilities>("/shopify/capabilities");
+      setShopifyCapabilities(data);
+    } catch {
+      setShopifyCapabilities(null);
+    }
+  }
+
   async function testShopifyConnection() {
     setTestShopifyBusy(true);
     setShopifyTestStatus("");
@@ -380,6 +399,7 @@ export default function SettingsPage() {
       setShopifyAccessToken("");
       setShopifyClientSecret("");
       await loadShopifyConfig();
+      await loadShopifyCapabilities();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Shopify-config opslaan mislukt");
     }
@@ -714,7 +734,7 @@ export default function SettingsPage() {
           icon={<Store className="h-5 w-5" />}
           eyebrow="Integraties"
           title="Shopify integratie"
-          description="Koppel Shopify om besteldata in het cloud-dashboard en de afhandelingsflow te tonen."
+          description="Koppel Shopify om besteldata en orderevents in het cloud-dashboard en de afhandelingsflow te tonen."
           aside={
             <div className={`rounded-full px-3 py-1 text-xs font-medium ${shopifyHasToken ? "bg-green-500/15 text-green-600 dark:text-green-300" : "bg-card/40"}`}>
               {shopifyHasToken ? "Geconfigureerd" : "Token vereist"}
@@ -727,6 +747,9 @@ export default function SettingsPage() {
           <p className="mt-1 text-xs opacity-70">
             Toegangstoken: Shopify Admin → Apps and sales channels → Develop apps → jouw app → Configuration (scope: read_orders)
             → App installeren → API credentials → Admin API-access token.
+          </p>
+          <p className="mt-1 text-xs opacity-70">
+            Shopify Inbox-conversaties zijn niet beschikbaar via deze Admin API-route. De huidige integratie kan wel Shopify-orderdata en orderevents tonen.
           </p>
           <p className="mt-1 text-xs opacity-70">
             Client ID/Secret kun je optioneel bewaren als referentie, maar voor bestellingen is altijd een Admin API-access token nodig.
@@ -822,6 +845,24 @@ export default function SettingsPage() {
           {shopifyTestStatus && (
             <div className="mt-2 rounded-xl border border-border bg-card/50 p-3 text-sm">
               <p>{shopifyTestStatus}</p>
+            </div>
+          )}
+
+          {shopifyCapabilities && (
+            <div className="mt-4 rounded-2xl border border-border bg-card/35 p-4">
+              <p className="text-sm font-medium">Shopify API-capaciteiten</p>
+              <p className="mt-2 text-xs opacity-70">{shopifyCapabilities.inbox_chat_reason}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {shopifyCapabilities.granted_scopes.length > 0 ? (
+                  shopifyCapabilities.granted_scopes.map((scope) => (
+                    <span key={scope} className="rounded-full border border-border px-2.5 py-1 text-xs opacity-80">
+                      {scope}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs opacity-60">Geen scopes gevonden.</span>
+                )}
+              </div>
             </div>
           )}
         </SectionShell>

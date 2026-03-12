@@ -701,7 +701,7 @@ export default function DashboardPage() {
 
                   <div className="rounded-xl border border-border bg-card/40 p-3">
                     <div className="mb-2 flex items-center justify-between">
-                      <p className="text-xs opacity-60">Shopify chats & gebeurtenissen</p>
+                      <p className="text-xs opacity-60">Shopify events & orderactiviteit</p>
                       {selectedOrder?.id && (
                         <button
                           onClick={() => void loadOrderEvents(selectedOrder.id)}

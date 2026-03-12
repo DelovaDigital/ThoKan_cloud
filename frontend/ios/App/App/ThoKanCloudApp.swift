@@ -311,7 +311,7 @@ final class AppNotificationMonitor: NSObject, UNUserNotificationCenterDelegate {
                 let orderName = event.order_name.isEmpty ? "Order \(event.order_id)" : event.order_name
                 await deliverNotification(
                     identifier: "shopify-\(event.id)",
-                    title: "New Shopify chat: \(orderName)",
+                    title: "New Shopify event: \(orderName)",
                     body: "\(event.author): \(event.message)"
                 )
             }
