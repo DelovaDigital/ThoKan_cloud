@@ -92,6 +92,13 @@ class FetchUpdateRequest(BaseModel):
     channel: str = "stable"
 
 
+class GitHubFetchApplyRequest(BaseModel):
+    repo_url: str = "https://github.com/AlessioD200/ThoKan_cloud"
+    branch: str = "main"
+    channel: str = "stable"
+    dry_run: bool = False
+
+
 def _normalize_channel(value: str | None) -> str:
     channel = (value or "stable").strip().lower()
     return channel if channel in {"stable", "beta"} else "stable"
@@ -191,6 +198,169 @@ def _run_shell_command(command: str, timeout_seconds: int = 3600) -> subprocess.
         text=True,
         timeout=timeout_seconds,
     )
+
+
+@router.post("/update/fetch-and-apply-github", response_model=UpdateStatus)
+def fetch_and_apply_github(
+    payload: GitHubFetchApplyRequest,
+    current_user: User = Depends(get_current_user),
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Clone a GitHub repo, build an update package (update.sh + payload/), and run the update script.
+
+    The package will be stored in the server updates directory and applied immediately.
+    """
+    channel = _normalize_channel(payload.channel)
+    update_dir = _updates_dir()
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+    safe_branch = _safe_name(payload.branch)
+    parsed = urlparse(payload.repo_url)
+    repo_name = _safe_name(Path(parsed.path).stem) or "repo"
+    target_name = f"{timestamp}_{channel}_{repo_name}.tar.gz"
+    target_path = update_dir / target_name
+
+    started_at = datetime.now(UTC).isoformat()
+    _save_update_status(
+        db,
+        {
+            "state": "running",
+            "package_name": target_name,
+            "channel": channel,
+            "started_at": started_at,
+            "finished_at": None,
+            "return_code": None,
+            "stdout": "",
+            "stderr": "",
+        },
+    )
+
+    try:
+        with tempfile.TemporaryDirectory(dir=str(update_dir)) as tmpdir:
+            tmp = Path(tmpdir)
+            repo_dir = tmp / "repo"
+
+            git_cmd = f"git clone --depth 1 --branch {payload.branch} {payload.repo_url} {repo_dir}"
+            git_result = _run_shell_command(git_cmd, timeout_seconds=600)
+            if git_result.returncode != 0:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Git clone failed: {git_result.stderr}")
+
+            # Prepare package layout: update.sh at root, payload/ contains repo files
+            payload_dir = tmp / "package_payload"
+            payload_dir.mkdir(parents=True, exist_ok=True)
+
+            # Copy repo contents into payload/
+            rsync_cmd = f"rsync -a --delete {repo_dir}/ {payload_dir}/"
+            rsync_result = _run_shell_command(rsync_cmd)
+            if rsync_result.returncode != 0:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to prepare payload: {rsync_result.stderr}")
+
+            # Write a simple update.sh that mirrors expected structure
+            update_sh = tmp / "update.sh"
+            update_sh.write_text(
+                """#!/usr/bin/env bash
+set -euo pipefail
+CHANNEL="${THOKAN_UPDATE_CHANNEL:-stable}"
+DRY_RUN="${THOKAN_DRY_RUN:-0}"
+TARGET_ROOT="/opt/thokan-cloud"
+PAYLOAD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/payload"
+
+echo "[ThoKan update] channel=${CHANNEL} dry_run=${DRY_RUN}"
+
+if [[ "${DRY_RUN}" == "1" ]]; then
+  echo "[ThoKan update] DRY RUN: would sync payload to ${TARGET_ROOT}"
+  echo "rsync -a --delete ${PAYLOAD_DIR}/ ${TARGET_ROOT}/"
+  exit 0
+fi
+
+if [[ ! -d "${TARGET_ROOT}" ]]; then
+  echo "[ThoKan update] ERROR: target root does not exist: ${TARGET_ROOT}" >&2
+  exit 1
+fi
+
+echo "[ThoKan update] Syncing payload to ${TARGET_ROOT}..."
+rsync -a --delete "${PAYLOAD_DIR}/" "${TARGET_ROOT}/"
+
+echo "[ThoKan update] Package payload applied successfully."
+""",
+                encoding="utf-8",
+            )
+
+            # Create tar.gz with update.sh and payload/
+            import tarfile as _tar
+
+            with _tar.open(target_path, "w:gz") as tarf:
+                tarf.add(str(update_sh), arcname="update.sh")
+                tarf.add(str(payload_dir), arcname="payload")
+
+            # Now execute update.sh similarly to apply_update_package (but without docker/ubuntu post-steps)
+            with tempfile.TemporaryDirectory(dir=str(update_dir)) as extract_tmp:
+                extract_path = Path(extract_tmp)
+                with tarfile.open(target_path, "r:gz") as archive:
+                    _safe_extract_tar(archive, extract_path)
+
+                script_path = (extract_path / "update.sh").resolve()
+                env = os.environ.copy()
+                env["THOKAN_DRY_RUN"] = "1" if payload.dry_run else "0"
+                env["THOKAN_UPDATE_CHANNEL"] = channel
+
+                result = subprocess.run(["bash", str(script_path)], cwd=str(extract_path), capture_output=True, text=True, env=env, timeout=1800)
+
+                finished_at = datetime.now(UTC).isoformat()
+                status_payload = {
+                    "state": "success" if result.returncode == 0 else "failed",
+                    "package_name": target_name,
+                    "channel": channel,
+                    "started_at": started_at,
+                    "finished_at": finished_at,
+                    "return_code": result.returncode,
+                    "stdout": (result.stdout or "")[-10000:],
+                    "stderr": (result.stderr or "")[-10000:],
+                }
+                _save_update_status(db, status_payload)
+                return UpdateStatus(**status_payload)
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        finished_at = datetime.now(UTC).isoformat()
+        status_payload = {
+            "state": "failed",
+            "package_name": target_name,
+            "channel": channel,
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "return_code": -1,
+            "stdout": "",
+            "stderr": str(exc),
+        }
+        _save_update_status(db, status_payload)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Fetch & apply failed: {exc}") from exc
+
+
+@router.post("/update/restart", response_model=dict)
+def restart_docker_after_update(
+    current_user: User = Depends(get_current_user),
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Run the production docker-compose rebuild command. Returns the command output."""
+    cfg = _load_update_config(db)
+    # Prefer configured command but ensure uses prod compose file
+    docker_cmd = f"sudo {str(cfg.get('docker_update_command') or 'docker compose up -d --build')} -f docker-compose.prod.yml"
+
+    # However the config value may already include compose flags; prefer explicit target
+    # Run command from repo root
+    try:
+        result = _run_shell_command(docker_cmd, timeout_seconds=3600)
+        return {
+            "return_code": result.returncode,
+            "stdout": (result.stdout or "")[-20000:],
+            "stderr": (result.stderr or "")[-20000:],
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Restart failed: {exc}") from exc
 
 
 def _save_update_status(db: Session, payload: dict) -> None:

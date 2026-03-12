@@ -269,13 +269,34 @@ export default function SettingsPage() {
     setFetchBusy(true);
     setStatus("");
     try {
-      const fetched = await api<UpdatePackage>("/system/update/fetch-latest", {
+      const result = await api<UpdateStatus>("/system/update/fetch-and-apply-github", {
         method: "POST",
-        body: JSON.stringify({ channel: updateChannel }),
+        body: JSON.stringify({
+          repo_url: "https://github.com/AlessioD200/ThoKan_cloud",
+          branch: "main",
+          channel: updateChannel,
+          dry_run: dryRun,
+        }),
       });
-      setStatus(`Laatste ${updateChannel}-update opgehaald: ${fetched.name}`);
+      setUpdateStatus(result);
+      setStatus(result.state === "success" ? "Laatste update toegepast" : "Update mislukt");
       await loadUpdateData();
-      setSelectedPackage(fetched.name);
+
+      if (result.state === "success") {
+        const restart = window.confirm("Update is toegepast. Wil je de server nu herstarten?");
+        if (restart) {
+          setStatus("Herstarten...");
+          try {
+            const restartRes = await api<{ return_code: number; stdout: string; stderr: string }>(
+              "/system/update/restart",
+              { method: "POST" },
+            );
+            setStatus(restartRes.return_code === 0 ? "Herstart voltooid" : "Herstart mislukt");
+          } catch (err) {
+            setStatus(err instanceof Error ? err.message : "Herstart mislukt");
+          }
+        }
+      }
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Laatste update ophalen mislukt");
     }
