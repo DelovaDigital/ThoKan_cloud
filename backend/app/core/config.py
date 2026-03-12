@@ -18,8 +18,11 @@ class Settings(BaseSettings):
 
     jwt_access_secret: str = Field(default="change_me_access_secret")
     jwt_refresh_secret: str = Field(default="change_me_refresh_secret")
-    jwt_access_expires_min: int = 15
-    jwt_refresh_expires_days: int = 7
+    # Set very long defaults so sessions effectively do not expire by default.
+    # Minutes for access token (default ~10 years)
+    jwt_access_expires_min: int = 5256000
+    # Days for refresh token (default ~10 years)
+    jwt_refresh_expires_days: int = 3650
     csrf_secret: str = "change_me_csrf_secret"
 
     storage_driver: str = "local"
