@@ -22,8 +22,8 @@ const featureCards = [
     icon: Mail,
   },
   {
-    title: "Shopify feed",
-    description: "Volg Shopify orderevents in een centrale feed en zie sneller wanneer bestellingactiviteit verandert.",
+    title: "Shopify",
+    description: "Bekijk websitechats naast Shopify orderevents in een centrale werkruimte voor klantactiviteit.",
     href: "/shopify",
     icon: MessageSquareText,
   },

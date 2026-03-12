@@ -1,17 +1,26 @@
 import base64
+import hashlib
 import re
+import secrets
+from datetime import datetime, timezone
 from urllib.parse import parse_qs, unquote, urlparse
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.session import get_db
 from app.deps import get_current_user, get_user_roles
 from app.models import SystemSetting, User
 from app.services.encryption import decrypt_bytes, encrypt_bytes
+from app.services.audit import log_event
 
 router = APIRouter()
+
+SHOPIFY_WEBSITE_CHAT_BRIDGE_KEY = "shopify-website-chat:global"
+SHOPIFY_WEBSITE_CHAT_CONVERSATION_PREFIX = "shopify-website-chat:conversation:"
+SHOPIFY_WEBSITE_CHAT_MAX_MESSAGES = 200
 
 
 def _shopify_key(user_id: str) -> str:
@@ -59,7 +68,7 @@ def _is_global_shopify_config(db: Session, user_id: str) -> bool:
     return _get_direct_raw_config(db, _shopify_key(user_id)) is None and _get_direct_raw_config(db, _global_shopify_key()) is not None
 
 
-def _save_config(db: Session, key: str, updated_by: str, value: dict) -> None:
+def _save_config(db: Session, key: str, updated_by: str | None, value: dict) -> None:
     row = db.get(SystemSetting, key)
     if not row:
         row = SystemSetting(key=key, value=value, updated_by=updated_by)
@@ -228,6 +237,160 @@ def _fetch_shopify_order_events(db: Session, user_id: str, raw: dict, order_id: 
     return _map_shopify_events(events)
 
 
+def _shopify_website_chat_endpoint_path() -> str:
+    return "/api/v1/shopify/website-chat/ingest"
+
+
+def _shopify_website_chat_endpoint_url() -> str:
+    return f"{settings.api_url.rstrip('/')}{_shopify_website_chat_endpoint_path()}"
+
+
+def _website_chat_conversation_key(conversation_id: str) -> str:
+    digest = hashlib.sha1(conversation_id.strip().encode("utf-8")).hexdigest()
+    return f"{SHOPIFY_WEBSITE_CHAT_CONVERSATION_PREFIX}{digest}"
+
+
+def _website_chat_bridge_config(db: Session) -> dict:
+    row = db.get(SystemSetting, SHOPIFY_WEBSITE_CHAT_BRIDGE_KEY)
+    return row.value if row else {}
+
+
+def _website_chat_bridge_secret(raw: dict) -> str:
+    return _decrypted_secret(raw, "shared_secret_enc", "shared_secret_iv")
+
+
+def _normalize_chat_timestamp(value: str | None) -> str:
+    if not value:
+        return datetime.now(timezone.utc).isoformat()
+
+    text = value.strip()
+    if not text:
+        return datetime.now(timezone.utc).isoformat()
+
+    try:
+        normalized = text.replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(normalized)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc).isoformat()
+    except ValueError:
+        return datetime.now(timezone.utc).isoformat()
+
+
+def _conversation_summary(raw: dict) -> dict:
+    messages = raw.get("messages") or []
+    return {
+        "conversation_id": raw.get("conversation_id") or "",
+        "source": raw.get("source") or "shopify-website-chat",
+        "status": raw.get("status") or "open",
+        "customer_name": raw.get("customer_name") or "",
+        "customer_email": raw.get("customer_email") or "",
+        "customer_phone": raw.get("customer_phone") or "",
+        "page_url": raw.get("page_url") or "",
+        "shop_domain": raw.get("shop_domain") or "",
+        "last_message_at": raw.get("last_message_at") or "",
+        "last_message_preview": raw.get("last_message_preview") or "",
+        "last_message_id": raw.get("last_message_id") or "",
+        "unread_count": int(raw.get("unread_count") or 0),
+        "message_count": len(messages),
+    }
+
+
+def _upsert_website_chat_message(db: Session, payload: dict, request: Request) -> tuple[dict, bool]:
+    conversation_id = (payload.get("conversation_id") or payload.get("thread_id") or payload.get("chat_id") or "").strip()
+    message_text = (payload.get("message") or payload.get("body") or "").strip()
+
+    if not conversation_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="conversation_id is required")
+    if not message_text:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="message is required")
+
+    sent_at = _normalize_chat_timestamp(payload.get("sent_at") or payload.get("created_at"))
+    direction = (payload.get("direction") or "inbound").strip().lower()
+    if direction not in {"inbound", "outbound"}:
+        direction = "inbound"
+
+    message_id = (payload.get("message_id") or "").strip()
+    if not message_id:
+        fingerprint = "|".join(
+            [
+                conversation_id,
+                sent_at,
+                direction,
+                message_text,
+                (payload.get("author_name") or "").strip(),
+                (payload.get("author_email") or "").strip(),
+            ]
+        )
+        message_id = hashlib.sha1(fingerprint.encode("utf-8")).hexdigest()
+
+    key = _website_chat_conversation_key(conversation_id)
+    row = db.get(SystemSetting, key)
+    current = row.value if row else {}
+    messages = list(current.get("messages") or [])
+    if any(existing.get("id") == message_id for existing in messages):
+        return current, False
+
+    message = {
+        "id": message_id,
+        "direction": direction,
+        "message": message_text,
+        "sent_at": sent_at,
+        "author_name": (payload.get("author_name") or payload.get("sender_name") or "").strip(),
+        "author_email": (payload.get("author_email") or payload.get("sender_email") or "").strip(),
+        "page_url": (payload.get("page_url") or current.get("page_url") or "").strip(),
+        "metadata": payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
+    }
+
+    messages.append(message)
+    messages.sort(key=lambda item: item.get("sent_at") or "")
+    if len(messages) > SHOPIFY_WEBSITE_CHAT_MAX_MESSAGES:
+        messages = messages[-SHOPIFY_WEBSITE_CHAT_MAX_MESSAGES:]
+
+    updated = {
+        "conversation_id": conversation_id,
+        "source": (payload.get("source") or current.get("source") or "shopify-website-chat").strip(),
+        "status": (payload.get("status") or current.get("status") or "open").strip() or "open",
+        "customer_name": (payload.get("customer_name") or current.get("customer_name") or "").strip(),
+        "customer_email": (payload.get("customer_email") or current.get("customer_email") or "").strip(),
+        "customer_phone": (payload.get("customer_phone") or current.get("customer_phone") or "").strip(),
+        "page_url": (payload.get("page_url") or current.get("page_url") or "").strip(),
+        "shop_domain": (payload.get("shop_domain") or current.get("shop_domain") or "").strip(),
+        "last_message_at": sent_at,
+        "last_message_preview": message_text[:240],
+        "last_message_id": message_id,
+        "unread_count": int(current.get("unread_count") or 0) + (1 if direction == "inbound" else 0),
+        "messages": messages,
+    }
+    _save_config(db, key, None, updated)
+
+    log_event(
+        db,
+        "shopify.website_chat.ingest",
+        entity_type="shopify_website_chat",
+        metadata={
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+            "direction": direction,
+            "customer_email": updated["customer_email"],
+            "page_url": updated["page_url"],
+            "ip_address": request.client.host if request.client else None,
+        },
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    return updated, True
+
+
+def _website_chat_conversation_rows(db: Session) -> list[SystemSetting]:
+    return (
+        db.query(SystemSetting)
+        .filter(SystemSetting.key.like(f"{SHOPIFY_WEBSITE_CHAT_CONVERSATION_PREFIX}%"))
+        .all()
+    )
+
+
 @router.get("/config")
 def get_shopify_config(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     raw = _get_raw_config(db, str(current_user.id)) or {}
@@ -346,6 +509,137 @@ def get_shopify_capabilities(current_user: User = Depends(get_current_user), db:
         raise
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to load Shopify capabilities: {exc}") from exc
+
+
+@router.get("/website-chat/config")
+def get_shopify_website_chat_config(
+    _admin: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    roles = get_user_roles(db, _admin.id)
+    if "admin" not in roles:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    raw = _website_chat_bridge_config(db)
+    secret = _website_chat_bridge_secret(raw)
+    return {
+        "enabled": bool(raw.get("enabled", False)),
+        "shared_secret": secret,
+        "has_shared_secret": bool(secret),
+        "endpoint_path": _shopify_website_chat_endpoint_path(),
+        "endpoint_url": _shopify_website_chat_endpoint_url(),
+        "integration_note": (
+            "Use this bridge from your website backend or middleware. Avoid exposing the shared secret directly in browser-side code."
+        ),
+    }
+
+
+@router.put("/website-chat/config")
+def save_shopify_website_chat_config(
+    payload: dict,
+    admin_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    roles = get_user_roles(db, admin_user.id)
+    if "admin" not in roles:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    raw = _website_chat_bridge_config(db)
+    regenerate_secret = bool(payload.get("regenerate_secret", False))
+    shared_secret = (payload.get("shared_secret") or "").strip()
+    enabled = bool(payload.get("enabled", raw.get("enabled", False)))
+
+    if regenerate_secret and not shared_secret:
+        shared_secret = secrets.token_urlsafe(32)
+
+    if enabled and not shared_secret and not _website_chat_bridge_secret(raw):
+        shared_secret = secrets.token_urlsafe(32)
+
+    encrypted_secret = raw.get("shared_secret_enc")
+    encrypted_secret_iv = raw.get("shared_secret_iv")
+    if shared_secret:
+        encrypted_secret, encrypted_secret_iv = _encrypt_secret(shared_secret)
+
+    updated = {
+        "enabled": enabled,
+        "shared_secret_enc": encrypted_secret,
+        "shared_secret_iv": encrypted_secret_iv,
+    }
+    _save_config(db, SHOPIFY_WEBSITE_CHAT_BRIDGE_KEY, str(admin_user.id), updated)
+
+    return {
+        "message": "Shopify website-chat bridge opgeslagen",
+        "enabled": enabled,
+        "shared_secret": shared_secret or _website_chat_bridge_secret(updated),
+        "has_shared_secret": bool(_website_chat_bridge_secret(updated)),
+        "endpoint_path": _shopify_website_chat_endpoint_path(),
+        "endpoint_url": _shopify_website_chat_endpoint_url(),
+    }
+
+
+@router.post("/website-chat/ingest")
+def ingest_shopify_website_chat(payload: dict, request: Request, db: Session = Depends(get_db)):
+    raw = _website_chat_bridge_config(db)
+    if not raw or not raw.get("enabled"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shopify website chat bridge is not enabled")
+
+    expected_secret = _website_chat_bridge_secret(raw)
+    provided_secret = (request.headers.get("x-shopify-chat-secret") or "").strip()
+    if not expected_secret or provided_secret != expected_secret:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid bridge secret")
+
+    conversation, created = _upsert_website_chat_message(db, payload, request)
+    return {
+        "ok": True,
+        "stored": created,
+        "conversation_id": conversation.get("conversation_id") or "",
+        "last_message_id": conversation.get("last_message_id") or "",
+    }
+
+
+@router.get("/website-chat/inbox")
+def list_shopify_website_chat_inbox(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _ = current_user
+    rows = _website_chat_conversation_rows(db)
+    conversations = [_conversation_summary(row.value or {}) for row in rows]
+    conversations.sort(key=lambda item: item.get("last_message_at") or "", reverse=True)
+    unread_conversations = len([item for item in conversations if int(item.get("unread_count") or 0) > 0])
+    unread_messages = sum(int(item.get("unread_count") or 0) for item in conversations)
+    return {
+        "conversations": conversations,
+        "count": len(conversations),
+        "unread_conversations": unread_conversations,
+        "unread_messages": unread_messages,
+    }
+
+
+@router.get("/website-chat/conversations/{conversation_id}")
+def get_shopify_website_chat_conversation(
+    conversation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _ = current_user
+    row = db.get(SystemSetting, _website_chat_conversation_key(conversation_id))
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    return row.value or {}
+
+
+@router.post("/website-chat/conversations/{conversation_id}/read")
+def mark_shopify_website_chat_read(
+    conversation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row = db.get(SystemSetting, _website_chat_conversation_key(conversation_id))
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+
+    value = row.value or {}
+    value["unread_count"] = 0
+    _save_config(db, row.key, str(current_user.id), value)
+    return {"message": "Conversation marked as read"}
 
 
 @router.get("/orders")

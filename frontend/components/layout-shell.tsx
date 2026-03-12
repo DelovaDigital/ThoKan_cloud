@@ -11,7 +11,7 @@ import { ensureSession } from "@/lib/api";
 const items = [
   { href: "/dashboard", label: "Overzicht", icon: LayoutGrid },
   { href: "/files", label: "Bestanden", icon: Folder },
-  { href: "/shopify", label: "Shopify feed", icon: MessageSquareText },
+  { href: "/shopify", label: "Shopify", icon: MessageSquareText },
   { href: "/mail", label: "E-mail", icon: Mail },
   { href: "/admin", label: "Admin", icon: Shield },
   { href: "/settings", label: "Instellingen", icon: Settings },

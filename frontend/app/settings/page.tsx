@@ -88,6 +88,15 @@ type ShopifyCapabilities = {
   inbox_chat_reason: string;
 };
 
+type ShopifyWebsiteChatBridgeConfig = {
+  enabled: boolean;
+  shared_secret: string;
+  has_shared_secret: boolean;
+  endpoint_path: string;
+  endpoint_url: string;
+  integration_note: string;
+};
+
 type GelatoConfig = {
   base_url: string;
   has_api_key: boolean;
@@ -177,6 +186,10 @@ export default function SettingsPage() {
   const [shopifyIsGlobal, setShopifyIsGlobal] = useState(false);
   const [shopifyApplyToAll, setShopifyApplyToAll] = useState(false);
   const [shopifyCapabilities, setShopifyCapabilities] = useState<ShopifyCapabilities | null>(null);
+  const [shopifyWebsiteChatBridge, setShopifyWebsiteChatBridge] = useState<ShopifyWebsiteChatBridgeConfig | null>(null);
+  const [shopifyWebsiteChatEnabled, setShopifyWebsiteChatEnabled] = useState(false);
+  const [shopifyWebsiteChatSecret, setShopifyWebsiteChatSecret] = useState("");
+  const [shopifyWebsiteChatBusy, setShopifyWebsiteChatBusy] = useState(false);
   const [shopifyBusy, setShopifyBusy] = useState(false);
   const [shopifyTestStatus, setShopifyTestStatus] = useState("");
   const [testShopifyBusy, setTestShopifyBusy] = useState(false);
@@ -197,6 +210,7 @@ export default function SettingsPage() {
     loadUpdateConfig();
     loadShopifyConfig();
     loadShopifyCapabilities();
+    loadShopifyWebsiteChatBridgeConfig();
     loadGelatoConfig();
     loadCurrentUser();
   }, []);
@@ -353,6 +367,19 @@ export default function SettingsPage() {
     }
   }
 
+  async function loadShopifyWebsiteChatBridgeConfig() {
+    try {
+      const data = await api<ShopifyWebsiteChatBridgeConfig>("/shopify/website-chat/config");
+      setShopifyWebsiteChatBridge(data);
+      setShopifyWebsiteChatEnabled(Boolean(data.enabled));
+      setShopifyWebsiteChatSecret(data.shared_secret || "");
+    } catch {
+      setShopifyWebsiteChatBridge(null);
+      setShopifyWebsiteChatEnabled(false);
+      setShopifyWebsiteChatSecret("");
+    }
+  }
+
   async function testShopifyConnection() {
     setTestShopifyBusy(true);
     setShopifyTestStatus("");
@@ -404,6 +431,28 @@ export default function SettingsPage() {
       setStatus(err instanceof Error ? err.message : "Shopify-config opslaan mislukt");
     }
     setShopifyBusy(false);
+  }
+
+  async function saveShopifyWebsiteChatBridgeConfig(regenerateSecret = false) {
+    setShopifyWebsiteChatBusy(true);
+    setStatus("");
+    try {
+      const result = await api<ShopifyWebsiteChatBridgeConfig & { message: string }>("/shopify/website-chat/config", {
+        method: "PUT",
+        body: JSON.stringify({
+          enabled: shopifyWebsiteChatEnabled,
+          shared_secret: shopifyWebsiteChatSecret.trim(),
+          regenerate_secret: regenerateSecret,
+        }),
+      });
+      setStatus(result.message);
+      setShopifyWebsiteChatBridge(result);
+      setShopifyWebsiteChatEnabled(Boolean(result.enabled));
+      setShopifyWebsiteChatSecret(result.shared_secret || "");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Shopify website-chat bridge opslaan mislukt");
+    }
+    setShopifyWebsiteChatBusy(false);
   }
 
   async function loadGelatoConfig() {
@@ -473,6 +522,7 @@ export default function SettingsPage() {
       { key: "storage", title: "Huidige opslag" },
       { key: "storage", title: "Beschikbare mount points" },
       { key: "integrations", title: "Shopify integratie" },
+      { key: "integrations", title: "Shopify website-chat bridge" },
       { key: "integrations", title: "Gelato integratie" },
       { key: "updates", title: "Systeemupdates" },
     ];
@@ -522,6 +572,7 @@ export default function SettingsPage() {
                     loadUpdateData();
                     loadUpdateConfig();
                     loadShopifyConfig();
+                    loadShopifyWebsiteChatBridgeConfig();
                     loadGelatoConfig();
                   }}
                   disabled={loading}
@@ -752,6 +803,9 @@ export default function SettingsPage() {
             Shopify Inbox-conversaties zijn niet beschikbaar via deze Admin API-route. De huidige integratie kan wel Shopify-orderdata en orderevents tonen.
           </p>
           <p className="mt-1 text-xs opacity-70">
+            Voor websitechats kun je hieronder de website-chat bridge activeren. Je website of middleware stuurt dan berichten naar Cloud, waar ze in de Shopify-werkruimte verschijnen.
+          </p>
+          <p className="mt-1 text-xs opacity-70">
             Client ID/Secret kun je optioneel bewaren als referentie, maar voor bestellingen is altijd een Admin API-access token nodig.
           </p>
 
@@ -862,6 +916,95 @@ export default function SettingsPage() {
                 ) : (
                   <span className="text-xs opacity-60">Geen scopes gevonden.</span>
                 )}
+              </div>
+            </div>
+          )}
+
+          {canConfigureGlobal && (
+            <div className="mt-5 rounded-[1.5rem] border border-border/70 bg-card/25 p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium">Shopify website-chat bridge</p>
+                  <p className="mt-1 text-xs opacity-70">
+                    Gebruik deze bridge wanneer je websitechatbox berichten server-side of via middleware naar ThoKan Cloud moet doorsturen.
+                  </p>
+                </div>
+                <div className={`rounded-full px-3 py-1 text-xs font-medium ${shopifyWebsiteChatEnabled ? "bg-green-500/15 text-green-600 dark:text-green-300" : "bg-card/40"}`}>
+                  {shopifyWebsiteChatEnabled ? "Ingeschakeld" : "Uitgeschakeld"}
+                </div>
+              </div>
+
+              <label className="mt-4 flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={shopifyWebsiteChatEnabled}
+                  onChange={(e) => setShopifyWebsiteChatEnabled(e.target.checked)}
+                />
+                Website-chat bridge inschakelen
+              </label>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium">Bridge endpoint</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={shopifyWebsiteChatBridge?.endpoint_url || ""}
+                    className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm opacity-80"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">Shared secret</label>
+                  <input
+                    type="text"
+                    value={shopifyWebsiteChatSecret}
+                    onChange={(e) => setShopifyWebsiteChatSecret(e.target.value)}
+                    placeholder="Laat leeg om automatisch te genereren bij inschakelen"
+                    className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  onClick={() => void saveShopifyWebsiteChatBridgeConfig(false)}
+                  disabled={shopifyWebsiteChatBusy}
+                  className="rounded-2xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                >
+                  {shopifyWebsiteChatBusy ? "Opslaan..." : "Bridge opslaan"}
+                </button>
+                <button
+                  onClick={() => void saveShopifyWebsiteChatBridgeConfig(true)}
+                  disabled={shopifyWebsiteChatBusy}
+                  className="rounded-xl border border-border bg-card px-4 py-2 text-sm font-medium transition hover:bg-accent/10 disabled:opacity-50"
+                >
+                  Nieuw secret genereren
+                </button>
+              </div>
+
+              {shopifyWebsiteChatBridge?.integration_note && (
+                <p className="mt-3 text-xs opacity-70">{shopifyWebsiteChatBridge.integration_note}</p>
+              )}
+
+              <div className="mt-4 rounded-2xl border border-border bg-card/35 p-4">
+                <p className="text-sm font-medium">Payload voorbeeld</p>
+                <pre className="mt-3 overflow-x-auto whitespace-pre-wrap rounded-xl border border-border bg-card/40 p-3 text-xs opacity-85">{`POST ${shopifyWebsiteChatBridge?.endpoint_path || "/api/v1/shopify/website-chat/ingest"}
+Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
+
+{
+  "conversation_id": "shopify-chat-123",
+  "message_id": "message-456",
+  "customer_name": "Jane Doe",
+  "customer_email": "jane@example.com",
+  "customer_phone": "+32...",
+  "page_url": "https://jouwdomein.be/products/item",
+  "shop_domain": "your-store.myshopify.com",
+  "direction": "inbound",
+  "message": "Hallo, ik heb een vraag over mijn bestelling",
+  "sent_at": "2026-03-12T10:30:00Z",
+  "source": "shopify-website-chat",
+  "author_name": "Jane Doe"
+}`}</pre>
               </div>
             </div>
           )}

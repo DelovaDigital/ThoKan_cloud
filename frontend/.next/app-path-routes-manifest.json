@@ -1,12 +1,12 @@
 {
   "/_not-found/page": "/_not-found",
-  "/dashboard/page": "/dashboard",
   "/files/page": "/files",
-  "/shopify/page": "/shopify",
-  "/settings/page": "/settings",
-  "/login/page": "/login",
-  "/mail/page": "/mail",
-  "/register/page": "/register",
   "/admin/page": "/admin",
-  "/page": "/"
+  "/shopify/page": "/shopify",
+  "/dashboard/page": "/dashboard",
+  "/settings/page": "/settings",
+  "/page": "/",
+  "/mail/page": "/mail",
+  "/login/page": "/login",
+  "/register/page": "/register"
 }
