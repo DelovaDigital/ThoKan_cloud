@@ -192,7 +192,7 @@ export async function ensureSession(): Promise<boolean> {
     await apiRaw("/auth/me", { method: "GET" });
     return true;
   } catch {
-    if (typeof window !== "undefined" && (accessToken || refreshToken)) {
+    if (typeof window !== "undefined" && accessToken) {
       sessionStorage.setItem("auth_notice", "Sessie verlopen. Log opnieuw in om verder te gaan.");
     }
     localStorage.removeItem("access_token");

@@ -14,24 +14,24 @@
     "capacitor:build:android": "next build && cap copy && cap sync android"
   },
   "dependencies": {
-    "next": "15.2.0",
-    "react": "19.0.0",
-    "react-dom": "19.0.0",
-    "lucide-react": "0.477.0",
-    "@capacitor/core": "^6.0.0",
     "@capacitor/app": "^6.0.0",
-    "@capacitor/network": "^6.0.0"
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/network": "^6.0.0",
+    "lucide-react": "0.477.0",
+    "next": "^15.5.12",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
   },
   "devDependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/cli": "^8.2.0",
+    "@capacitor/ios": "^6.0.0",
     "@types/node": "22.13.10",
     "@types/react": "19.0.10",
     "@types/react-dom": "19.0.4",
     "autoprefixer": "10.4.20",
     "postcss": "8.5.3",
     "tailwindcss": "3.4.17",
-    "typescript": "5.8.2",
-    "@capacitor/cli": "^6.0.0",
-    "@capacitor/ios": "^6.0.0",
-    "@capacitor/android": "^6.0.0"
+    "typescript": "5.8.2"
   }
 }
