@@ -4,6 +4,7 @@ import hashlib
 import mimetypes
 import uuid
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File as UploadFileField, HTTPException, UploadFile, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -23,6 +24,13 @@ from app.services.storage import get_storage_driver
 
 router = APIRouter()
 optional_bearer = HTTPBearer(auto_error=False)
+
+
+def _build_content_disposition(filename: str) -> str:
+    sanitized = filename.replace("\r", "").replace("\n", "").replace('"', "")
+    fallback = sanitized.encode("ascii", "ignore").decode("ascii").strip() or "download.bin"
+    encoded = quote(sanitized or fallback, safe="")
+    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
 
 
 def _is_admin(db: Session, user: User) -> bool:
@@ -143,11 +151,24 @@ def download_file(
     if row.owner_id != current_user.id and not _is_admin(db, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
-    encrypted = get_storage_driver().read(row.storage_key)
-    raw = decrypt_bytes(encrypted, row.encryption_iv) if row.encryption_iv else encrypted
+    try:
+        encrypted = get_storage_driver().read(row.storage_key)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file content not found") from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to read stored file content") from exc
+
+    try:
+        raw = decrypt_bytes(encrypted, row.encryption_iv) if row.encryption_iv else encrypted
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Stored file content is corrupted") from exc
 
     log_event(db, "file.download", actor_user_id=current_user.id, entity_type="file", entity_id=row.id)
-    return StreamingResponse(iter([raw]), media_type=row.mime_type, headers={"Content-Disposition": f'attachment; filename="{row.name}"'})
+    return StreamingResponse(
+        iter([raw]),
+        media_type=row.mime_type or "application/octet-stream",
+        headers={"Content-Disposition": _build_content_disposition(row.name)},
+    )
 
 
 @router.patch("/{file_id}/rename", response_model=FileResponse)

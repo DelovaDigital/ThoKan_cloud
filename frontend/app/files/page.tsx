@@ -42,7 +42,9 @@ function isTextLikeFile(file: FileRow): boolean {
   const textExtensions = [
     ".txt",
     ".md",
+    ".markdown",
     ".csv",
+    ".tsv",
     ".log",
     ".json",
     ".xml",
@@ -50,6 +52,11 @@ function isTextLikeFile(file: FileRow): boolean {
     ".yml",
     ".toml",
     ".ini",
+    ".cfg",
+    ".conf",
+    ".env",
+    ".properties",
+    ".rtf",
     ".py",
     ".js",
     ".ts",
@@ -57,14 +64,40 @@ function isTextLikeFile(file: FileRow): boolean {
     ".jsx",
     ".html",
     ".css",
+    ".scss",
+    ".less",
     ".sql",
     ".sh",
+    ".bash",
+    ".zsh",
+    ".c",
+    ".h",
+    ".cpp",
+    ".hpp",
+    ".java",
+    ".cs",
+    ".go",
+    ".rs",
+    ".swift",
+    ".kt",
+    ".php",
+    ".rb",
+    ".vue",
+    ".svelte",
+    ".dockerfile",
+    ".gitignore",
+    ".editorconfig",
   ];
   return (
     mime.startsWith("text/") ||
     mime.includes("json") ||
     mime.includes("xml") ||
     mime.includes("javascript") ||
+    mime.includes("yaml") ||
+    mime.includes("x-sh") ||
+    mime.includes("x-python") ||
+    mime.includes("x-php") ||
+    mime.includes("rtf") ||
     mime.includes("csv") ||
     textExtensions.includes(ext)
   );
@@ -73,19 +106,19 @@ function isTextLikeFile(file: FileRow): boolean {
 function isImageFile(file: FileRow): boolean {
   const mime = (file.mime_type || "").toLowerCase();
   const ext = getFileExtension(file.name);
-  return mime.startsWith("image/") || [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".ico"].includes(ext);
+  return mime.startsWith("image/") || [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".ico", ".avif", ".tif", ".tiff", ".heic", ".heif"].includes(ext);
 }
 
 function isVideoFile(file: FileRow): boolean {
   const mime = (file.mime_type || "").toLowerCase();
   const ext = getFileExtension(file.name);
-  return mime.startsWith("video/") || [".mp4", ".webm", ".mov", ".avi", ".mkv", ".m4v"].includes(ext);
+  return mime.startsWith("video/") || [".mp4", ".webm", ".mov", ".avi", ".mkv", ".m4v", ".mpeg", ".mpg", ".ogv", ".3gp", ".3g2", ".ts", ".m2ts"].includes(ext);
 }
 
 function isAudioFile(file: FileRow): boolean {
   const mime = (file.mime_type || "").toLowerCase();
   const ext = getFileExtension(file.name);
-  return mime.startsWith("audio/") || [".mp3", ".wav", ".ogg", ".m4a", ".aac", ".flac"].includes(ext);
+  return mime.startsWith("audio/") || [".mp3", ".wav", ".ogg", ".m4a", ".aac", ".flac", ".opus", ".aif", ".aiff", ".amr"].includes(ext);
 }
 
 function isPdfFile(file: FileRow): boolean {
@@ -96,17 +129,17 @@ function isPdfFile(file: FileRow): boolean {
 
 function isOfficeWordFile(file: FileRow): boolean {
   const ext = getFileExtension(file.name);
-  return ext === ".docx" || ext === ".doc";
+  return [".docx", ".doc", ".docm", ".dotx", ".dotm", ".odt", ".pages"].includes(ext);
 }
 
 function isOfficeExcelFile(file: FileRow): boolean {
   const ext = getFileExtension(file.name);
-  return ext === ".xlsx" || ext === ".xls";
+  return [".xlsx", ".xls", ".xlsm", ".xltx", ".xltm", ".ods", ".numbers"].includes(ext);
 }
 
 function isOfficePowerPointFile(file: FileRow): boolean {
   const ext = getFileExtension(file.name);
-  return ext === ".pptx" || ext === ".ppt";
+  return [".pptx", ".ppt", ".pptm", ".ppsx", ".ppsm", ".potx", ".potm", ".odp", ".key"].includes(ext);
 }
 
 function isOfficeFile(file: FileRow): boolean {
@@ -114,7 +147,7 @@ function isOfficeFile(file: FileRow): boolean {
 }
 
 function isPreviewSupported(file: FileRow): boolean {
-  return isImageFile(file) || isVideoFile(file) || isAudioFile(file) || isPdfFile(file) || isTextLikeFile(file) || isOfficeFile(file);
+  return Boolean(file.id);
 }
 
 function getFileKind(file: FileRow): "image" | "video" | "audio" | "pdf" | "office" | "text" | "other" {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -16,6 +17,13 @@ from app.services.encryption import decrypt_bytes
 from app.services.storage import get_storage_driver
 
 router = APIRouter()
+
+
+def _build_content_disposition(filename: str) -> str:
+    sanitized = filename.replace("\r", "").replace("\n", "").replace('"', "")
+    fallback = sanitized.encode("ascii", "ignore").decode("ascii").strip() or "download.bin"
+    encoded = quote(sanitized or fallback, safe="")
+    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
 
 
 @router.post("/files/{file_id}/users")
@@ -93,12 +101,26 @@ def download_by_share_link(token: str, password: str | None = None, db: Session 
     if not file:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
-    encrypted = get_storage_driver().read(file.storage_key)
-    raw = decrypt_bytes(encrypted, file.encryption_iv) if file.encryption_iv else encrypted
+    try:
+        encrypted = get_storage_driver().read(file.storage_key)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file content not found") from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to read stored file content") from exc
+
+    try:
+        raw = decrypt_bytes(encrypted, file.encryption_iv) if file.encryption_iv else encrypted
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Stored file content is corrupted") from exc
+
     row.download_count += 1
     db.commit()
     log_event(db, "sharing.link.download", entity_type="file", entity_id=file.id)
-    return StreamingResponse(iter([raw]), media_type=file.mime_type, headers={"Content-Disposition": f'attachment; filename="{file.name}"'})
+    return StreamingResponse(
+        iter([raw]),
+        media_type=file.mime_type or "application/octet-stream",
+        headers={"Content-Disposition": _build_content_disposition(file.name)},
+    )
 
 
 @router.delete("/links/{link_id}")
