@@ -395,6 +395,13 @@ def fetch_and_apply_github(
 
             semver = repo_version.split("+", 1)[0].strip() if repo_version else ""
             build_meta = f"{timestamp}-{safe_branch}"
+            commit_result = subprocess.run(
+                ["git", "-C", str(repo_dir), "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            git_commit = commit_result.stdout.strip() if commit_result.returncode == 0 else ""
             version_info = {
                 "app_version": semver or None,
                 "build": build_meta,
@@ -402,6 +409,7 @@ def fetch_and_apply_github(
                 "source": "git",
                 "repo_url": payload.repo_url,
                 "branch": payload.branch,
+                "git_commit": git_commit or None,
             }
             (payload_dir / "version.json").write_text(json.dumps(version_info, indent=2), encoding="utf-8")
 
@@ -942,6 +950,7 @@ def apply_update_package(
 
             post_stdout: list[str] = []
             post_stderr: list[str] = []
+            package_git_commit: str | None = None
 
             if result.returncode == 0 and not payload.dry_run and auto_rebuild_docker:
                 running_status.update({"progress": 50, "progress_step": "Docker services herstartten..."})
@@ -973,6 +982,39 @@ def apply_update_package(
                         stderr=(result.stderr or "") + "".join(post_stderr),
                     )
 
+            if result.returncode == 0 and not payload.dry_run:
+                try:
+                    import json as _json
+                    import re as _re
+
+                    version_file = extract_path / "payload" / "version.json"
+                    if version_file.exists():
+                        metadata = _json.loads(version_file.read_text())
+                        possible_commit = str(metadata.get("git_commit") or "").strip()
+                        if possible_commit and _re.fullmatch(r"[0-9a-fA-F]{7,40}", possible_commit):
+                            package_git_commit = possible_commit
+                except Exception:
+                    package_git_commit = None
+
+            if result.returncode == 0 and not payload.dry_run and package_git_commit:
+                target_root = _resolve_install_root()
+                if (target_root / ".git").exists():
+                    running_status.update({"progress": 90, "progress_step": "Git werkmap synchroniseren..."})
+                    _save_update_status(db, running_status)
+                    sync_result = _run_shell_command_in_root(
+                        f"git fetch --all --prune && git reset --hard {package_git_commit} && git clean -fd",
+                        timeout_seconds=300,
+                    )
+                    post_stdout.append(f"\n[Git sync]\n{sync_result.stdout or ''}")
+                    post_stderr.append(f"\n[Git sync]\n{sync_result.stderr or ''}")
+                    if sync_result.returncode != 0:
+                        result = subprocess.CompletedProcess(
+                            args=result.args,
+                            returncode=sync_result.returncode,
+                            stdout=(result.stdout or "") + "".join(post_stdout),
+                            stderr=(result.stderr or "") + "".join(post_stderr),
+                        )
+
             finished_at = datetime.now(timezone.utc).isoformat()
             status_payload = {
                 "state": "success" if result.returncode == 0 else "failed",
@@ -994,7 +1036,7 @@ def apply_update_package(
                     version_file = extract_path / "payload" / "version.json"
                     if version_file.exists():
                         import json as _json
-                        pkg_version = _json.loads(version_file.read_text())["app_version"]
+                        pkg_version = (_json.loads(version_file.read_text()) or {}).get("app_version")
                 except Exception:
                     pass
                 if pkg_version is None:

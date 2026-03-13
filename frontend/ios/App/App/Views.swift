@@ -969,77 +969,112 @@ struct ChatConversationSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var draft = ""
+    @FocusState private var isComposerFocused: Bool
+
+    private let bottomAnchorId = "chat-bottom-anchor"
+
+    private func dismissKeyboard() {
+        isComposerFocused = false
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                if viewModel.isLoading {
-                    Spacer()
-                    ProgressView("Loading chat...")
-                    Spacer()
-                } else if viewModel.messages.isEmpty {
-                    ContentUnavailableView("No messages yet", systemImage: "message")
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 8) {
-                            ForEach(viewModel.messages, id: \.id) { message in
-                                let isOwn = message.sender_id == authViewModel.currentUser?.id
-                                HStack {
-                                    if isOwn { Spacer(minLength: 32) }
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(isOwn ? "Jij" : userName)
-                                            .font(.caption2.weight(.semibold))
-                                            .foregroundStyle(.secondary)
-                                        Text(message.body)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                        Text(message.created_at)
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
+            ScrollViewReader { proxy in
+                VStack(spacing: 0) {
+                    if viewModel.isLoading {
+                        Spacer()
+                        ProgressView("Loading chat...")
+                        Spacer()
+                    } else if viewModel.messages.isEmpty {
+                        ContentUnavailableView("No messages yet", systemImage: "message")
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 8) {
+                                ForEach(viewModel.messages, id: \.id) { message in
+                                    let isOwn = message.sender_id == authViewModel.currentUser?.id
+                                    HStack {
+                                        if isOwn { Spacer(minLength: 32) }
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(isOwn ? "Jij" : userName)
+                                                .font(.caption2.weight(.semibold))
+                                                .foregroundStyle(.secondary)
+                                            Text(message.body)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                            Text(message.created_at)
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .padding(10)
+                                        .background(isOwn ? Color.blue.opacity(0.18) : Color(uiColor: .secondarySystemFill))
+                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                        if !isOwn { Spacer(minLength: 32) }
                                     }
-                                    .padding(10)
-                                    .background(isOwn ? Color.blue.opacity(0.18) : Color(uiColor: .secondarySystemFill))
-                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    if !isOwn { Spacer(minLength: 32) }
+                                }
+                                Color.clear
+                                    .frame(height: 1)
+                                    .id(bottomAnchorId)
+                            }
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            dismissKeyboard()
+                        }
+                    }
+
+                    if let errorMessage = viewModel.errorMessage {
+                        Text(errorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .padding(.horizontal)
+                            .padding(.top, 8)
+                    }
+
+                    HStack(spacing: 12) {
+                        TextField("Type a message", text: $draft, axis: .vertical)
+                            .textFieldStyle(.roundedBorder)
+                            .lineLimit(1...4)
+                            .focused($isComposerFocused)
+
+                        Button {
+                            Task {
+                                let sent = await viewModel.sendMessage(userId: userId, body: draft)
+                                if sent {
+                                    draft = ""
+                                    withAnimation(.easeOut(duration: 0.2)) {
+                                        proxy.scrollTo(bottomAnchorId, anchor: .bottom)
+                                    }
                                 }
                             }
-                        }
-                        .padding(.horizontal)
-                        .padding(.vertical, 8)
-                    }
-                }
-
-                if let errorMessage = viewModel.errorMessage {
-                    Text(errorMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                        .padding(.horizontal)
-                        .padding(.top, 8)
-                }
-
-                HStack(spacing: 12) {
-                    TextField("Type a message", text: $draft, axis: .vertical)
-                        .textFieldStyle(.roundedBorder)
-                        .lineLimit(1...4)
-
-                    Button {
-                        Task {
-                            let sent = await viewModel.sendMessage(userId: userId, body: draft)
-                            if sent {
-                                draft = ""
+                        } label: {
+                            if viewModel.isSending {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "paperplane.fill")
                             }
                         }
-                    } label: {
-                        if viewModel.isSending {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "paperplane.fill")
-                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(viewModel.isSending)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(viewModel.isSending)
+                    .padding()
+                    .background(Color(uiColor: .systemGroupedBackground))
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        dismissKeyboard()
+                    }
                 }
-                .padding()
-                .background(Color(uiColor: .systemGroupedBackground))
+                .onChange(of: viewModel.messages.count) { _, _ in
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo(bottomAnchorId, anchor: .bottom)
+                    }
+                }
+                .onAppear {
+                    DispatchQueue.main.async {
+                        proxy.scrollTo(bottomAnchorId, anchor: .bottom)
+                    }
+                }
             }
             .navigationTitle(userName)
             .navigationBarTitleDisplayMode(.inline)
@@ -1052,6 +1087,11 @@ struct ChatConversationSheet: View {
             }
             .task {
                 await viewModel.loadConversation(userId: userId)
+            }
+            .onReceive(Timer.publish(every: 2.5, on: .main, in: .common).autoconnect()) { _ in
+                Task {
+                    await viewModel.loadConversation(userId: userId)
+                }
             }
         }
     }

@@ -128,9 +128,29 @@ def main() -> int:
         copy_repo_payload(root, payload_root)
         sync_payload_versions(payload_root, sem_ver)
 
+        git_commit = ""
+        try:
+            import subprocess
+
+            git_result = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if git_result.returncode == 0:
+                git_commit = git_result.stdout.strip()
+        except Exception:
+            git_commit = ""
+
         # Write version metadata into the payload so the backend can read it after extraction
         build_id = args.version.split("+")[1] if "+" in args.version else ""
-        version_info = {"app_version": sem_ver, "build": build_id, "full_version": args.version}
+        version_info = {
+            "app_version": sem_ver,
+            "build": build_id,
+            "full_version": args.version,
+            "git_commit": git_commit or None,
+        }
         (payload_root / "version.json").write_text(json.dumps(version_info, indent=2))
 
         shutil.copy2(update_script, staging_root / "update.sh")
