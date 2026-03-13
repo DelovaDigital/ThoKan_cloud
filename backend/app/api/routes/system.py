@@ -322,12 +322,16 @@ def _run_shell_command_in_root(command: str, timeout_seconds: int = 3600) -> sub
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Target install root not found: {target_root}",
         )
+    import os
+    env = os.environ.copy()
+    env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:" + env.get("PATH", "")
     return subprocess.run(
-        ["bash", "-lc", command],
+        ["bash", "-c", command],
         capture_output=True,
         text=True,
         timeout=timeout_seconds,
         cwd=str(target_root),
+        env=env,
     )
 
 

@@ -183,7 +183,7 @@ export default function ChatPage() {
         {error && <div className="rounded-[1.5rem] border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
 
         <div className="grid gap-5 xl:grid-cols-[0.9fr_1.3fr]">
-          <section className="glass rounded-[2rem] p-5 sm:p-6 min-h-[68vh] flex flex-col">
+          <section className="glass rounded-[2rem] p-5 sm:p-6 h-[68vh] flex flex-col overflow-hidden">
             <div className="flex items-start gap-4 border-b border-border/60 pb-5">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
                 <Users className="h-5 w-5" />
@@ -202,7 +202,7 @@ export default function ChatPage() {
               </div>
             </div>
 
-            <ul className="mt-4 space-y-2">
+            <ul className="mt-4 flex-1 space-y-2 overflow-y-auto">
               {filteredUsers.map((user) => (
                 <li key={user.id}>
                   <button
@@ -220,7 +220,7 @@ export default function ChatPage() {
             </ul>
           </section>
 
-          <section className="glass rounded-[2rem] p-5 sm:p-6 min-h-[68vh] flex flex-col">
+          <section className="glass rounded-[2rem] p-5 sm:p-6 h-[68vh] flex flex-col overflow-hidden">
             {selectedUser ? (
               <>
                 <div className="border-b border-border/60 pb-5">
@@ -229,7 +229,7 @@ export default function ChatPage() {
                   <p className="mt-1 text-sm opacity-65">{selectedUser.email}</p>
                 </div>
 
-                <div ref={messagesContainerRef} className="mt-4 flex-1 min-h-[320px] space-y-2 overflow-y-auto rounded-2xl border border-border bg-card/20 p-3">
+                <div ref={messagesContainerRef} className="mt-4 flex-1 space-y-2 overflow-y-auto rounded-2xl border border-border bg-card/20 p-3">
                   {loadingConversation ? (
                     <p className="text-sm opacity-70">Chat laden...</p>
                   ) : messages.length === 0 ? (
