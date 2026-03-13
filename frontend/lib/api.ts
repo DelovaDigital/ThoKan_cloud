@@ -63,6 +63,12 @@ function csrfToken() {
 
 // No refresh-token flow: access tokens are long-lived and users remain logged in until they log out.
 
+function redirectToLogin() {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem("auth_notice", "Sessie verlopen. Log opnieuw in om verder te gaan.");
+  window.location.replace("/login");
+}
+
 export async function apiRaw(path: string, options?: RequestInit): Promise<Response> {
   const headers = new Headers(options?.headers);
   const auth = authHeaders();
@@ -88,9 +94,9 @@ export async function apiRaw(path: string, options?: RequestInit): Promise<Respo
   }
 
   if (response.status === 401) {
-    // No refresh flow: treat 401 as session invalid and require re-login
     localStorage.removeItem("access_token");
-    throw new Error("Session expired. Please log in again.");
+    redirectToLogin();
+    throw new Error("Sessie verlopen. Log opnieuw in om verder te gaan.");
   }
 
   if (!response.ok) {
@@ -128,7 +134,8 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (response.status === 401) {
     localStorage.removeItem("access_token");
-    throw new Error("Session expired. Please log in again.");
+    redirectToLogin();
+    throw new Error("Sessie verlopen. Log opnieuw in om verder te gaan.");
   }
 
   if (!response.ok) {
@@ -167,7 +174,8 @@ export async function uploadFile(file: File, folderId?: string) {
 
   if (response.status === 401) {
     localStorage.removeItem("access_token");
-    throw new Error("Session expired. Please log in again.");
+    redirectToLogin();
+    throw new Error("Sessie verlopen. Log opnieuw in om verder te gaan.");
   }
 
   if (!response.ok) {
@@ -179,23 +187,34 @@ export async function uploadFile(file: File, folderId?: string) {
 }
 
 export async function ensureSession(): Promise<boolean> {
-  if (typeof window === "undefined") {
-    return false;
-  }
+  if (typeof window === "undefined") return false;
 
   const accessToken = localStorage.getItem("access_token");
-  if (!accessToken) {
-    return false;
-  }
+  if (!accessToken) return false;
 
   try {
-    await apiRaw("/auth/me", { method: "GET" });
+    // Use raw fetch directly so a network error (backend restarting, briefly unreachable)
+    // does NOT trigger a logout. Only an actual 401 from the backend means the session
+    // is invalid and the user must re-authenticate.
+    const response = await fetch(`${getApiBase()}/auth/me`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      credentials: "include",
+      cache: "no-store",
+    });
+
+    if (response.status === 401) {
+      localStorage.removeItem("access_token");
+      sessionStorage.setItem("auth_notice", "Sessie verlopen. Log opnieuw in om verder te gaan.");
+      return false;
+    }
+
+    // Any other response (200, 403, 5xx…) means the backend is reachable.
+    // Keep the user logged in regardless — individual API calls will surface real errors.
     return true;
   } catch {
-    if (typeof window !== "undefined" && accessToken) {
-      sessionStorage.setItem("auth_notice", "Sessie verlopen. Log opnieuw in om verder te gaan.");
-    }
-    localStorage.removeItem("access_token");
-    return false;
+    // Network error: backend temporarily unreachable (e.g. during restart).
+    // Trust the stored token and let the user stay logged in.
+    return true;
   }
 }
