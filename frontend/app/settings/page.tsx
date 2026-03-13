@@ -174,7 +174,7 @@ export default function SettingsPage() {
   const [updateChannel, setUpdateChannel] = useState<"stable" | "beta">("stable");
   const [updateBusy, setUpdateBusy] = useState(false);
   const [fetchBusy, setFetchBusy] = useState(false);
-  const [dryRun, setDryRun] = useState(true);
+  const [dryRun, setDryRun] = useState(false);
   const [updateFile, setUpdateFile] = useState<File | null>(null);
   const [shopifyDomain, setShopifyDomain] = useState("");
   const [shopifyApiVersion, setShopifyApiVersion] = useState("2024-10");
@@ -1222,7 +1222,7 @@ Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
             </select>
             <label className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
               <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
-              Proefdraaien
+              Proefdraaien (geen wijzigingen)
             </label>
             <button
               onClick={applyUpdate}
