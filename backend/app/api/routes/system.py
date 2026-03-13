@@ -28,7 +28,7 @@ UPDATE_CONFIG_KEY = "system_update_config"
 DEFAULT_GITHUB_UPDATE_REPO = "AlessioD200/ThoKan_cloud"
 DEFAULT_GITHUB_UPDATE_BRANCH = "update-channel"
 TARGET_INSTALL_ROOT = Path("/opt/thokan-cloud")
-PRODUCTION_DOCKER_UPDATE_COMMAND = "sudo docker compose -f docker-compose.prod.yml up -d --build"
+PRODUCTION_DOCKER_UPDATE_COMMAND = "if command -v sudo >/dev/null 2>&1; then sudo docker compose -f docker-compose.prod.yml up -d --build; else docker compose -f docker-compose.prod.yml up -d --build; fi"
 NOTES_CACHE_KEY = "update_notes_cache"
 
 
@@ -717,9 +717,6 @@ def apply_update_package(
     if not package_path.exists() or update_dir.resolve() not in package_path.parents:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Update package not found")
 
-    extraction_base = update_dir / "extracted"
-    extraction_base.mkdir(parents=True, exist_ok=True)
-
     started_at = datetime.now(timezone.utc).isoformat()
     release_notes = _get_notes_for_package(db, package_name)
     running_status: dict = {
@@ -738,7 +735,7 @@ def apply_update_package(
     _save_update_status(db, running_status)
 
     try:
-        with tempfile.TemporaryDirectory(dir=extraction_base) as tmp_dir:
+        with tempfile.TemporaryDirectory(prefix="thokan-update-") as tmp_dir:
             extract_path = Path(tmp_dir)
 
             if zipfile.is_zipfile(package_path):
