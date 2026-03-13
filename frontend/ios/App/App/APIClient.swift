@@ -169,6 +169,19 @@ class APIClient: NSObject {
         return try await request(URLRequest(url: url))
     }
 
+    func fetchDirectChatConversation(userId: String) async throws -> DirectChatConversationResponse {
+        let url = URL(string: "\(baseURL)/chat/conversations/\(userId)")!
+        return try await request(URLRequest(url: url))
+    }
+
+    func sendDirectChatMessage(userId: String, body: String) async throws -> MessageResponse {
+        let url = URL(string: "\(baseURL)/chat/conversations/\(userId)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = try JSONEncoder().encode(DirectChatSendRequest(body: body))
+        return try await self.request(request)
+    }
+
     func registerDeviceToken(_ token: String) async throws -> MessageResponse {
         let url = URL(string: "\(baseURL)/notifications/device-token")!
         var request = URLRequest(url: url)
@@ -204,7 +217,39 @@ class APIClient: NSObject {
 
     func fetchHealthStatus() async throws -> HealthResponse {
         let healthURL = URL(string: "\(baseURL.replacingOccurrences(of: "/api/v1", with: ""))/health")!
-        return try await requestWithoutAuth(URLRequest(url: healthURL))
+        var request = URLRequest(url: healthURL)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 15
+
+        let (data, response) = try await perform(request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let error = try? JSONDecoder().decode([String: String].self, from: data)
+            throw APIError.server(error?["detail"] ?? "Request failed")
+        }
+
+        if let decoded = try? JSONDecoder().decode(HealthResponse.self, from: data) {
+            return decoded
+        }
+
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let rawStatus = object["status"] {
+            return HealthResponse(status: String(describing: rawStatus))
+        }
+
+        if let rawText = String(data: data, encoding: .utf8), !rawText.isEmpty {
+            if rawText.lowercased().contains("ok") {
+                return HealthResponse(status: "ok")
+            }
+            return HealthResponse(status: rawText)
+        }
+
+        throw APIError.decoding("Invalid health response format")
     }
 
     func fetchUpdatePackages() async throws -> [UpdatePackageInfo] {
@@ -346,31 +391,23 @@ class APIClient: NSObject {
     }
 
     func downloadFile(fileId: String, fileName: String) async throws -> URL {
-        let url = URL(string: "\(baseURL)/files/\(fileId)/download")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setupHeaders(accessToken: accessToken)
-        request.timeoutInterval = 30
+        let endpointURL = URL(string: "\(baseURL)/files/\(fileId)/download")!
 
-        let (data, response) = try await perform(request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
-
-        guard (200...299).contains(httpResponse.statusCode) else {
-            if httpResponse.statusCode == 401 {
-                accessToken = nil
-                throw APIError.unauthorized
+        do {
+            return try await performFileDownload(from: endpointURL, fileName: fileName, includeAuthorizationHeader: true)
+        } catch {
+            guard let token = accessToken,
+                  var components = URLComponents(url: endpointURL, resolvingAgainstBaseURL: false) else {
+                throw error
             }
 
-            let error = try? JSONDecoder().decode([String: String].self, from: data)
-            throw APIError.server(error?["detail"] ?? "Download failed")
-        }
+            components.queryItems = [URLQueryItem(name: "token", value: token)]
+            guard let tokenURL = components.url else {
+                throw error
+            }
 
-        let temporaryURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString)-\(fileName)")
-        try data.write(to: temporaryURL, options: .atomic)
-        return temporaryURL
+            return try await performFileDownload(from: tokenURL, fileName: fileName, includeAuthorizationHeader: false)
+        }
     }
     
     // MARK: - Generic Request Handler
@@ -457,6 +494,50 @@ class APIClient: NSObject {
         case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         default: return "application/octet-stream"
         }
+    }
+
+    private func sanitizeFileName(_ value: String) -> String {
+        let invalidCharacters = CharacterSet(charactersIn: "/\\:\"<>|?*\n\r\t")
+        let cleaned = value
+            .components(separatedBy: invalidCharacters)
+            .joined(separator: "_")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if cleaned.isEmpty {
+            return "download.bin"
+        }
+        return cleaned
+    }
+
+    private func performFileDownload(from url: URL, fileName: String, includeAuthorizationHeader: Bool) async throws -> URL {
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("*/*", forHTTPHeaderField: "Accept")
+        if includeAuthorizationHeader, let token = accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        request.timeoutInterval = 30
+
+        let (data, response) = try await perform(request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            if httpResponse.statusCode == 401 {
+                accessToken = nil
+                throw APIError.unauthorized
+            }
+
+            let error = try? JSONDecoder().decode([String: String].self, from: data)
+            throw APIError.server(error?["detail"] ?? "Download failed")
+        }
+
+        let safeFileName = sanitizeFileName(fileName)
+        let temporaryURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString)-\(safeFileName)")
+        try data.write(to: temporaryURL, options: .atomic)
+        return temporaryURL
     }
 }
 

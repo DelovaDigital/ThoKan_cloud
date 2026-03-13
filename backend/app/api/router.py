@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routes import admin, auth, dashboard, files, folders, gelato, mail, notifications, permissions, sharing, shopify, system
+from app.api.routes import admin, auth, chat, dashboard, files, folders, gelato, mail, notifications, permissions, sharing, shopify, system
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -15,3 +15,4 @@ api_router.include_router(shopify.router, prefix="/shopify", tags=["shopify"])
 api_router.include_router(gelato.router, prefix="/gelato", tags=["gelato"])
 api_router.include_router(system.router, prefix="/system", tags=["system"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
+api_router.include_router(chat.router, prefix="/chat", tags=["chat"])

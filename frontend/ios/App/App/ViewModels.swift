@@ -472,6 +472,55 @@ class AdminViewModel {
 }
 
 @Observable
+class DirectChatViewModel {
+    @ObservationIgnored
+    private let apiClient = APIClient.shared
+
+    var messages: [DirectChatMessage] = []
+    var isLoading = false
+    var isSending = false
+    var errorMessage: String?
+
+    @MainActor
+    func loadConversation(userId: String) async {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            let response = try await apiClient.fetchDirectChatConversation(userId: userId)
+            messages = response.messages
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isLoading = false
+    }
+
+    @MainActor
+    func sendMessage(userId: String, body: String) async -> Bool {
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            errorMessage = "Message is required"
+            return false
+        }
+
+        isSending = true
+        errorMessage = nil
+
+        do {
+            _ = try await apiClient.sendDirectChatMessage(userId: userId, body: trimmed)
+            await loadConversation(userId: userId)
+            isSending = false
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            isSending = false
+            return false
+        }
+    }
+}
+
+@Observable
 class SettingsViewModel {
     @ObservationIgnored
     private let apiClient = APIClient.shared
@@ -498,9 +547,11 @@ class SettingsViewModel {
     var emailSignature = ""
     var applyToAll = false
     var cloudVersion = "Unknown"
+    var currentInstalledVersion = "Unknown"
     var systemHostname = ""
     var pythonVersion = ""
     var availableUpdatePackages: [UpdatePackageInfo] = []
+    var availableUpdateCandidate: UpdatePackageInfo?
     var updateStatus: UpdateStatusResponse?
     var lastNotifiedUpdateCount = UserDefaults.standard.integer(forKey: "lastUpdateNotificationCount")
 
@@ -521,6 +572,9 @@ class SettingsViewModel {
 
         do {
             cloudVersion = try await versionTask
+            if currentInstalledVersion == "Unknown" || currentInstalledVersion.isEmpty {
+                currentInstalledVersion = cloudVersion
+            }
         } catch {
             if errorMessage == nil {
                 errorMessage = error.localizedDescription
@@ -547,7 +601,12 @@ class SettingsViewModel {
             pythonVersion = system.python_version
             availableUpdatePackages = packages
             updateStatus = status
-            await notifyIfNeeded(packageCount: packages.count)
+            if let installedVersion = status.installed_version, !installedVersion.isEmpty {
+                currentInstalledVersion = installedVersion
+            } else if currentInstalledVersion == "Unknown" || currentInstalledVersion.isEmpty {
+                currentInstalledVersion = cloudVersion
+            }
+            await notifyIfNeeded(packages: packages)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -605,11 +664,30 @@ class SettingsViewModel {
     @MainActor
     func fetchLatestStableUpdate() async {
         isFetchingLatestUpdate = true
+        statusMessage = nil
         errorMessage = nil
 
         do {
             let package = try await apiClient.fetchLatestUpdate(channel: "stable")
-            statusMessage = "Fetched update: \(package.name)"
+            let current = normalizeVersion(currentInstalledVersion) ?? normalizeVersion(cloudVersion)
+            let incoming = normalizeVersion(package.version) ?? normalizeVersion(extractVersionFromPackageName(package.name))
+
+            guard let incoming else {
+                availableUpdateCandidate = nil
+                statusMessage = "No newer version available."
+                isFetchingLatestUpdate = false
+                return
+            }
+
+            if let current,
+               !isVersionNewer(incoming, than: current) {
+                availableUpdateCandidate = nil
+                statusMessage = "You're already on version \(currentInstalledVersion)."
+            } else {
+                availableUpdateCandidate = package
+                statusMessage = nil
+            }
+
             await loadAdminUpdateInfo()
         } catch {
             errorMessage = error.localizedDescription
@@ -620,7 +698,7 @@ class SettingsViewModel {
 
     @MainActor
     func applyLatestUpdate() async {
-        guard let latestPackage = availableUpdatePackages.first else {
+        guard let latestPackage = availableUpdateCandidate ?? availableUpdatePackages.first else {
             errorMessage = "No update package available"
             return
         }
@@ -631,12 +709,23 @@ class SettingsViewModel {
         do {
             let status = try await apiClient.applyUpdate(packageName: latestPackage.name, channel: latestPackage.channel)
             updateStatus = status
+            availableUpdateCandidate = nil
+            if let installedVersion = status.installed_version, !installedVersion.isEmpty {
+                currentInstalledVersion = installedVersion
+            }
             statusMessage = "Update started for \(latestPackage.name)"
         } catch {
             errorMessage = error.localizedDescription
         }
 
         isApplyingUpdate = false
+    }
+
+    @MainActor
+    func cancelAvailableUpdate() {
+        availableUpdateCandidate = nil
+        statusMessage = nil
+        errorMessage = nil
     }
 
     @MainActor
@@ -655,8 +744,18 @@ class SettingsViewModel {
     }
 
     @MainActor
-    private func notifyIfNeeded(packageCount: Int) async {
-        guard packageCount > 0, packageCount > lastNotifiedUpdateCount else { return }
+    private func notifyIfNeeded(packages: [UpdatePackageInfo]) async {
+        let packageCount = countNewerPackages(in: packages)
+        guard packageCount > 0, packageCount > lastNotifiedUpdateCount else {
+            if packageCount == 0 {
+                let center = UNUserNotificationCenter.current()
+                center.removePendingNotificationRequests(withIdentifiers: ["thokan-cloud-updates"])
+                center.removeDeliveredNotifications(withIdentifiers: ["thokan-cloud-updates"])
+                lastNotifiedUpdateCount = 0
+                UserDefaults.standard.set(0, forKey: "lastUpdateNotificationCount")
+            }
+            return
+        }
 
         let center = UNUserNotificationCenter.current()
         let permission = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
@@ -664,14 +763,57 @@ class SettingsViewModel {
 
         let content = UNMutableNotificationContent()
         content.title = "ThoKan Cloud updates available"
-        content.body = "\(packageCount) update package(s) are ready on the server."
-        content.sound = .default
+        content.body = "\(packageCount) new update version(s) are available."
 
         let request = UNNotificationRequest(identifier: "thokan-cloud-updates", content: content, trigger: nil)
         try? await center.add(request)
 
         lastNotifiedUpdateCount = packageCount
         UserDefaults.standard.set(packageCount, forKey: "lastUpdateNotificationCount")
+    }
+
+    private func normalizeVersion(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else { return nil }
+        let withoutPrefix = trimmed.hasPrefix("v") ? String(trimmed.dropFirst()) : trimmed
+        let core = withoutPrefix.split(separator: "-", maxSplits: 1).first.map(String.init) ?? withoutPrefix
+        return core
+    }
+
+    private func extractVersionFromPackageName(_ packageName: String) -> String? {
+        let matches = packageName.matches(of: /\d+(?:\.\d+)+/)
+        guard let last = matches.last else { return nil }
+        return String(last.output)
+    }
+
+    private func isVersionNewer(_ incoming: String, than current: String) -> Bool {
+        let incomingParts = incoming.split(separator: ".").map { Int($0) ?? 0 }
+        let currentParts = current.split(separator: ".").map { Int($0) ?? 0 }
+        let count = max(incomingParts.count, currentParts.count)
+
+        for index in 0..<count {
+            let left = index < incomingParts.count ? incomingParts[index] : 0
+            let right = index < currentParts.count ? currentParts[index] : 0
+            if left != right {
+                return left > right
+            }
+        }
+
+        return false
+    }
+
+    private func countNewerPackages(in packages: [UpdatePackageInfo]) -> Int {
+        guard let current = normalizeVersion(currentInstalledVersion) ?? normalizeVersion(cloudVersion) else {
+            return 0
+        }
+
+        return packages.reduce(into: 0) { count, package in
+            let incoming = normalizeVersion(package.version) ?? normalizeVersion(extractVersionFromPackageName(package.name))
+            if let incoming, isVersionNewer(incoming, than: current) {
+                count += 1
+            }
+        }
     }
 }
 
@@ -696,31 +838,45 @@ class WorkspaceStatusViewModel {
     func refresh() async {
         isRefreshing = true
         errorMessage = nil
+        var partialErrors: [String] = []
 
         do {
-            async let healthTask = apiClient.fetchHealthStatus()
-            async let systemTask = apiClient.fetchSystemInfo()
-            async let updateTask = apiClient.fetchUpdateStatus()
-
-            let health = try await healthTask
-            let system = try await systemTask
-            let update = try await updateTask
-
+            let health = try await apiClient.fetchHealthStatus()
             cloudReachable = health.status.lowercased() == "ok"
             healthStatus = health.status
+        } catch {
+            cloudReachable = false
+            healthStatus = "Unavailable"
+            partialErrors.append("Health: \(error.localizedDescription)")
+        }
+
+        do {
+            let system = try await apiClient.fetchSystemInfo()
             hostName = system.hostname
             pythonVersion = system.python_version
+        } catch {
+            hostName = "-"
+            pythonVersion = "-"
+            partialErrors.append("System: \(error.localizedDescription)")
+        }
+
+        do {
+            let update = try await apiClient.fetchUpdateStatus()
             updateState = update.state
             if let finishedAt = update.finished_at, !finishedAt.isEmpty {
                 lastUpdatedAt = finishedAt
             }
-
-            let queue = await OfflineActionQueue.shared.snapshot()
-            queuedMailCount = queue.mailActions.count
-            queuedUploadCount = queue.uploadActions.count
         } catch {
-            cloudReachable = false
-            errorMessage = error.localizedDescription
+            updateState = "unknown"
+            partialErrors.append("Update: \(error.localizedDescription)")
+        }
+
+        let queue = await OfflineActionQueue.shared.snapshot()
+        queuedMailCount = queue.mailActions.count
+        queuedUploadCount = queue.uploadActions.count
+
+        if !partialErrors.isEmpty {
+            errorMessage = partialErrors.joined(separator: " | ")
         }
 
         let formatter = DateFormatter()

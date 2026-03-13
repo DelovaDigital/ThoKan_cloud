@@ -10,7 +10,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         }
 
         scheduleSyncTask()
-        true
+        return true
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {

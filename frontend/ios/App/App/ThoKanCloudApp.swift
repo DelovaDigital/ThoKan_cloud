@@ -357,7 +357,6 @@ final class AppNotificationMonitor: NSObject, UNUserNotificationCenterDelegate {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
-        content.sound = .default
         content.userInfo = ["target_tab": targetTab]
 
         let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
@@ -369,7 +368,7 @@ final class AppNotificationMonitor: NSObject, UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        completionHandler([.banner, .list, .sound])
+        completionHandler([.banner, .list])
     }
 
     func userNotificationCenter(

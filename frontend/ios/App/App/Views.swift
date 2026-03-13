@@ -569,14 +569,10 @@ struct ShopifyTab: View {
 struct EmailTab: View {
     @State private var viewModel = EmailViewModel()
     @State private var query = ""
-    @State private var unreadOnly = false
     @State private var isComposePresented = false
 
     private var filteredMessages: [MailMessage] {
         viewModel.messages.filter { message in
-            let unreadMatches = unreadOnly ? !((message.is_read) ?? true) : true
-            if !unreadMatches { return false }
-
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             if trimmed.isEmpty { return true }
 
@@ -595,22 +591,19 @@ struct EmailTab: View {
                     ContentUnavailableView("No messages", systemImage: "envelope")
                 } else {
                     List(filteredMessages, id: \.id) { message in
-                        NavigationLink(destination: EmailDetailView(viewModel: viewModel, messageId: message.id)) {
+                        NavigationLink {
+                            EmailDetailView(viewModel: viewModel, messageId: message.id)
+                                .navigationBarTitleDisplayMode(.inline)
+                        } label: {
                             MailMessageRow(message: message)
                         }
                     }
                 }
             }
             .navigationTitle("Email")
+            .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search mail")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Toggle(isOn: $unreadOnly) {
-                        Text("Unread")
-                    }
-                    .toggleStyle(.switch)
-                }
-
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 16) {
                         Button {
@@ -732,9 +725,11 @@ struct EmailDetailView: View {
 
 struct AdminTab: View {
     @State private var viewModel = AdminViewModel()
+    @State private var chatViewModel = DirectChatViewModel()
     @State private var selectedSegment: Int = 0
     @State private var searchQuery = ""
     @State private var showCreateUserSheet = false
+    @State private var selectedChatUser: AdminUserResponse?
 
     @State private var newUserEmail = ""
     @State private var newUserName = ""
@@ -769,6 +764,14 @@ struct AdminTab: View {
                         if selectedSegment == 0 {
                             ForEach(filteredUsers, id: \.id) { user in
                                 UserRow(user: user)
+                                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                        Button {
+                                            selectedChatUser = user
+                                        } label: {
+                                            Label("Chat", systemImage: "message")
+                                        }
+                                        .tint(.blue)
+                                    }
                                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                         Button(role: .destructive) {
                                             Task {
@@ -888,8 +891,90 @@ struct AdminTab: View {
                 }
             }
         }
+        .sheet(item: $selectedChatUser) { user in
+            UserChatSheet(user: user, viewModel: chatViewModel)
+        }
         .task {
             await viewModel.fetchAdminData()
+        }
+    }
+}
+
+struct UserChatSheet: View {
+    let user: AdminUserResponse
+    let viewModel: DirectChatViewModel
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var draft = ""
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                if viewModel.isLoading {
+                    Spacer()
+                    ProgressView("Loading chat...")
+                    Spacer()
+                } else if viewModel.messages.isEmpty {
+                    ContentUnavailableView("No messages yet", systemImage: "message")
+                } else {
+                    List(viewModel.messages, id: \.id) { message in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(message.body)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Text(message.created_at)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .listStyle(.plain)
+                }
+
+                if let errorMessage = viewModel.errorMessage {
+                    Text(errorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+                }
+
+                HStack(spacing: 12) {
+                    TextField("Type a message", text: $draft, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(1...4)
+
+                    Button {
+                        Task {
+                            let sent = await viewModel.sendMessage(userId: user.id, body: draft)
+                            if sent {
+                                draft = ""
+                            }
+                        }
+                    } label: {
+                        if viewModel.isSending {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "paperplane.fill")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(viewModel.isSending)
+                }
+                .padding()
+                .background(Color(uiColor: .systemGroupedBackground))
+            }
+            .navigationTitle(user.full_name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                }
+            }
+            .task {
+                await viewModel.loadConversation(userId: user.id)
+            }
         }
     }
 }
@@ -1025,41 +1110,8 @@ struct SettingsTab: View {
 
                 if isAdmin {
                     Section("Updates") {
-                        LabeledContent("Host") {
-                            Text(viewModel.systemHostname.isEmpty ? "Unknown" : viewModel.systemHostname)
-                        }
-
-                        LabeledContent("Python") {
-                            Text(viewModel.pythonVersion.isEmpty ? "Unknown" : viewModel.pythonVersion)
-                        }
-
-                        LabeledContent("Available packages") {
-                            Text("\(viewModel.availableUpdatePackages.count)")
-                        }
-
-                        if let updateStatus = viewModel.updateStatus {
-                            LabeledContent("Last update") {
-                                Text(updateStatus.state.capitalized)
-                            }
-
-                            if let packageName = updateStatus.package_name {
-                                LabeledContent("Package") {
-                                    Text(packageName)
-                                        .lineLimit(1)
-                                }
-                            }
-                        }
-
-                        Button {
-                            Task {
-                                await viewModel.loadAdminUpdateInfo()
-                            }
-                        } label: {
-                            if viewModel.isCheckingUpdates {
-                                ProgressView()
-                            } else {
-                                Text("Refresh update status")
-                            }
+                        LabeledContent("Current version") {
+                            Text(viewModel.currentInstalledVersion)
                         }
 
                         Button {
@@ -1070,22 +1122,50 @@ struct SettingsTab: View {
                             if viewModel.isFetchingLatestUpdate {
                                 ProgressView()
                             } else {
-                                Text("Fetch latest stable update")
+                                Text("Check updates")
                             }
                         }
 
-                        Button {
-                            Task {
-                                await viewModel.applyLatestUpdate()
+                        if let update = viewModel.availableUpdateCandidate {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Update available")
+                                    .font(.subheadline.weight(.semibold))
+
+                                Text("New version: \(update.version ?? update.name)")
+                                    .font(.footnote)
+
+                                Text(update.release_notes ?? "No release notes provided.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(5)
+
+                                HStack {
+                                    Button("Cancel") {
+                                        viewModel.cancelAvailableUpdate()
+                                    }
+                                    .buttonStyle(.bordered)
+
+                                    Spacer()
+
+                                    Button {
+                                        Task {
+                                            await viewModel.applyLatestUpdate()
+                                        }
+                                    } label: {
+                                        if viewModel.isApplyingUpdate {
+                                            ProgressView()
+                                        } else {
+                                            Text("Update")
+                                        }
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .disabled(viewModel.isApplyingUpdate)
+                                }
                             }
-                        } label: {
-                            if viewModel.isApplyingUpdate {
-                                ProgressView()
-                            } else {
-                                Text("Apply latest update")
-                            }
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
-                        .disabled(viewModel.availableUpdatePackages.isEmpty)
                     }
                 }
 
@@ -1193,7 +1273,7 @@ struct MailMessageRow: View {
                 VStack(alignment: .trailing, spacing: 4) {
                     if !(message.is_read ?? true) {
                         Circle()
-                            .fill(Color(red: 0.3, green: 0.6, blue: 0.9))
+                            .fill(.tint)
                             .frame(width: 8, height: 8)
                     }
                     
@@ -1205,7 +1285,7 @@ struct MailMessageRow: View {
             
             Text(message.snippet)
                 .font(.system(size: 12, weight: .regular))
-                .foregroundColor(.lightGray)
+                .foregroundStyle(.secondary)
                 .lineLimit(2)
         }
     }
@@ -1293,7 +1373,7 @@ struct UserRow: View {
         HStack(spacing: 12) {
             Image(systemName: "person.circle.fill")
                 .font(.system(size: 32))
-                .foregroundColor(Color(red: 0.3, green: 0.6, blue: 0.9))
+                .foregroundStyle(.tint)
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(user.full_name)
@@ -1308,7 +1388,7 @@ struct UserRow: View {
             
             Text(user.is_active ? "Active" : "Inactive")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(user.is_active ? .green : .gray)
+                .foregroundStyle(user.is_active ? .green : .secondary)
         }
     }
 }
@@ -1488,6 +1568,65 @@ struct QuickLookPreview: UIViewControllerRepresentable {
 struct MailPreviewView: UIViewRepresentable {
     let html: String
 
+        private var adaptiveStyleBlock: String {
+                """
+                <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\"> 
+                <style>
+                    :root { color-scheme: light dark; }
+                    html, body {
+                        margin: 0;
+                        padding: 0;
+                        font: -apple-system-body;
+                        line-height: 1.45;
+                    }
+                    body {
+                        padding: 12px;
+                        background: transparent;
+                        color: #111111;
+                        word-break: break-word;
+                    }
+                    a { color: #0A84FF; }
+                    img { max-width: 100%; height: auto; }
+                    pre, code {
+                        white-space: pre-wrap;
+                        word-break: break-word;
+                    }
+                    @media (prefers-color-scheme: dark) {
+                        body { color: #F2F2F7; }
+                        a { color: #64D2FF; }
+                    }
+                </style>
+                """
+        }
+
+        private var styledHTML: String {
+                let lowercased = html.lowercased()
+
+                if lowercased.contains("<html") {
+                        if lowercased.contains("</head>") {
+                                return html.replacingOccurrences(
+                                        of: "</head>",
+                                        with: "\(adaptiveStyleBlock)</head>",
+                                        options: .caseInsensitive,
+                                        range: nil
+                                )
+                        }
+                        return "\(adaptiveStyleBlock)\n\(html)"
+                }
+
+                return """
+                <!doctype html>
+                <html>
+                <head>
+                \(adaptiveStyleBlock)
+                </head>
+                <body>
+                \(html)
+                </body>
+                </html>
+                """
+        }
+
     func makeCoordinator() -> Coordinator {
         Coordinator()
     }
@@ -1509,7 +1648,7 @@ struct MailPreviewView: UIViewRepresentable {
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
-        webView.loadHTMLString(html, baseURL: nil)
+        webView.loadHTMLString(styledHTML, baseURL: nil)
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
@@ -1748,8 +1887,4 @@ extension View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
-}
-
-extension Color {
-    static let lightGray = Color(white: 0.65)
 }

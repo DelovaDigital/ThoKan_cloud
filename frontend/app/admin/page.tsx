@@ -1,13 +1,26 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { HardDrive, RefreshCw, Search, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { HardDrive, MessageSquare, RefreshCw, Search, Send, ShieldCheck, UserPlus, Users } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { api } from "@/lib/api";
 
 type User = { id: string; email: string; full_name: string; is_active: boolean };
 
 type Usage = { email: string; used_bytes: number };
+
+type ChatMessage = {
+  id: string;
+  sender_id: string;
+  recipient_id: string;
+  body: string;
+  created_at: string;
+};
+
+type ChatConversation = {
+  participant: User;
+  messages: ChatMessage[];
+};
 
 function formatStorage(bytes: number) {
   const mb = bytes / 1024 / 1024;
@@ -29,6 +42,11 @@ export default function AdminPage() {
   const [role, setRole] = useState("employee");
   const [userSearch, setUserSearch] = useState("");
   const [userSort, setUserSort] = useState<"name" | "email">("name");
+  const [selectedChatUser, setSelectedChatUser] = useState<User | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatDraft, setChatDraft] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatSending, setChatSending] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -100,6 +118,41 @@ export default function AdminPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gebruiker aanmaken mislukt");
     }
+  }
+
+  async function openChat(user: User) {
+    setSelectedChatUser(user);
+    setChatLoading(true);
+    setError("");
+    try {
+      const response = await api<ChatConversation>(`/chat/conversations/${user.id}`);
+      setChatMessages(response.messages);
+    } catch (err) {
+      setChatMessages([]);
+      setError(err instanceof Error ? err.message : "Chat laden mislukt");
+    }
+    setChatLoading(false);
+  }
+
+  async function sendChatMessage() {
+    if (!selectedChatUser) return;
+    const body = chatDraft.trim();
+    if (!body) return;
+
+    setChatSending(true);
+    setError("");
+    try {
+      await api<{ message: string }>(`/chat/conversations/${selectedChatUser.id}`, {
+        method: "POST",
+        body: JSON.stringify({ body }),
+      });
+      const response = await api<ChatConversation>(`/chat/conversations/${selectedChatUser.id}`);
+      setChatMessages(response.messages);
+      setChatDraft("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Bericht verzenden mislukt");
+    }
+    setChatSending(false);
   }
 
   const visibleUsers = useMemo(() => {
@@ -274,6 +327,12 @@ export default function AdminPage() {
                       {u.is_active ? "actief" : "inactief"}
                     </span>
                     <button
+                      onClick={() => void openChat(u)}
+                      className="rounded-xl border border-border px-3 py-1 text-xs transition hover:bg-card/70"
+                    >
+                      Chat
+                    </button>
+                    <button
                       onClick={() => void renameUser(u.id, u.full_name)}
                       className="rounded-xl border border-border px-3 py-1 text-xs transition hover:bg-card/70"
                     >
@@ -292,6 +351,63 @@ export default function AdminPage() {
             </ul>
           </section>
         </div>
+
+        {selectedChatUser && (
+          <section className="glass rounded-[2rem] p-5 sm:p-6">
+            <div className="flex items-start justify-between gap-4 border-b border-border/60 pb-5">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
+                  <MessageSquare className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] opacity-45">Direct chat</p>
+                  <h3 className="mt-1 text-xl font-semibold">{selectedChatUser.full_name}</h3>
+                  <p className="mt-2 text-sm opacity-65">{selectedChatUser.email}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedChatUser(null)}
+                className="rounded-2xl border border-border px-4 py-2 text-sm transition hover:bg-card/70"
+              >
+                Sluiten
+              </button>
+            </div>
+
+            <div className="mt-5 rounded-[1.5rem] border border-border bg-card/25 p-4">
+              {chatLoading ? (
+                <p className="text-sm opacity-70">Chat laden...</p>
+              ) : chatMessages.length === 0 ? (
+                <p className="text-sm opacity-70">Nog geen berichten.</p>
+              ) : (
+                <div className="space-y-3">
+                  {chatMessages.map((message) => (
+                    <div key={message.id} className="rounded-2xl border border-border/70 bg-card/35 p-3">
+                      <p className="text-sm">{message.body}</p>
+                      <p className="mt-2 text-xs opacity-55">{message.created_at}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex gap-3">
+              <textarea
+                value={chatDraft}
+                onChange={(e) => setChatDraft(e.target.value)}
+                placeholder="Typ een bericht"
+                className="min-h-[90px] flex-1 rounded-2xl border border-border bg-transparent px-3 py-2.5 text-sm"
+              />
+              <button
+                onClick={() => void sendChatMessage()}
+                disabled={chatSending || !chatDraft.trim()}
+                className="inline-flex items-center gap-2 self-end rounded-2xl bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+              >
+                <Send className="h-4 w-4" />
+                {chatSending ? "Verzenden..." : "Verzend"}
+              </button>
+            </div>
+          </section>
+        )}
 
         <section className="glass rounded-[2rem] p-5 sm:p-6">
           <div className="flex items-start gap-4 border-b border-border/60 pb-5">

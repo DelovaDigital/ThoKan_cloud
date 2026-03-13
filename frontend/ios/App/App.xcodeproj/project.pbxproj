@@ -12,6 +12,7 @@
 		50379B242058CBB4000EE86E /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50379B272058CBB4000EE86E /* Models.swift */; };
 		50379B252058CBB4000EE86E /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50379B282058CBB4000EE86E /* APIClient.swift */; };
 		50379B262058CBB4000EE86E /* ViewModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50379B292058CBB4000EE86E /* ViewModels.swift */; };
+		A1B2C3D42F11111111111111 /* Infrastructure.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D62F11111111111111 /* Infrastructure.swift */; };
 		50379B2A2058CBB4000EE86E /* ThoKanCloudApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50379B2B2058CBB4000EE86E /* ThoKanCloudApp.swift */; };
 		50379B2C2058CBB4000EE86E /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50379B2D2058CBB4000EE86E /* Views.swift */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
@@ -28,6 +29,7 @@
 		50379B272058CBB4000EE86E /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		50379B282058CBB4000EE86E /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		50379B292058CBB4000EE86E /* ViewModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewModels.swift; sourceTree = "<group>"; };
+		A1B2C3D62F11111111111111 /* Infrastructure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Infrastructure.swift; sourceTree = "<group>"; };
 		50379B2B2058CBB4000EE86E /* ThoKanCloudApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoKanCloudApp.swift; sourceTree = "<group>"; };
 		50379B2D2058CBB4000EE86E /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -89,6 +91,7 @@
 				50379B272058CBB4000EE86E /* Models.swift */,
 				50379B282058CBB4000EE86E /* APIClient.swift */,
 				50379B292058CBB4000EE86E /* ViewModels.swift */,
+				A1B2C3D62F11111111111111 /* Infrastructure.swift */,
 				50379B2D2058CBB4000EE86E /* Views.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
@@ -230,6 +233,7 @@
 				50379B242058CBB4000EE86E /* Models.swift in Sources */,
 				50379B252058CBB4000EE86E /* APIClient.swift in Sources */,
 				50379B262058CBB4000EE86E /* ViewModels.swift in Sources */,
+				A1B2C3D42F11111111111111 /* Infrastructure.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				50379B2C2058CBB4000EE86E /* Views.swift in Sources */,
 			);

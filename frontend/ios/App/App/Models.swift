@@ -187,6 +187,30 @@ struct AdminUserResponse: Decodable {
     let is_active: Bool
 }
 
+struct DirectChatMessage: Codable, Identifiable {
+    let id: String
+    let sender_id: String
+    let recipient_id: String
+    let body: String
+    let created_at: String
+}
+
+struct DirectChatParticipant: Codable {
+    let id: String
+    let email: String
+    let full_name: String
+    let is_active: Bool
+}
+
+struct DirectChatConversationResponse: Codable {
+    let participant: DirectChatParticipant
+    let messages: [DirectChatMessage]
+}
+
+struct DirectChatSendRequest: Encodable {
+    let body: String
+}
+
 struct AdminCreateUserRequest: Encodable {
     let email: String
     let full_name: String
@@ -232,6 +256,30 @@ struct SystemInfoResponse: Decodable {
     let platform: String
     let cpu_cores: Int
     let python_version: String
+
+    private enum CodingKeys: String, CodingKey {
+        case hostname
+        case platform
+        case cpu_cores
+        case python_version
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        hostname = (try? container.decode(String.self, forKey: .hostname)) ?? "-"
+        platform = (try? container.decode(String.self, forKey: .platform)) ?? "-"
+
+        if let cores = try? container.decode(Int.self, forKey: .cpu_cores) {
+            cpu_cores = cores
+        } else if let coreString = try? container.decode(String.self, forKey: .cpu_cores),
+                  let cores = Int(coreString) {
+            cpu_cores = cores
+        } else {
+            cpu_cores = 0
+        }
+
+        python_version = (try? container.decode(String.self, forKey: .python_version)) ?? "-"
+    }
 }
 
 struct HealthResponse: Decodable {
@@ -245,6 +293,8 @@ struct UpdatePackageInfo: Decodable, Identifiable {
     let channel: String
     let size_bytes: Int
     let modified_at: String
+    let release_notes: String?
+    let version: String?
 }
 
 struct UpdateStatusResponse: Decodable {
@@ -256,6 +306,43 @@ struct UpdateStatusResponse: Decodable {
     let return_code: Int?
     let stdout: String?
     let stderr: String?
+    let release_notes: String?
+    let installed_version: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case state
+        case package_name
+        case channel
+        case started_at
+        case finished_at
+        case return_code
+        case stdout
+        case stderr
+        case release_notes
+        case installed_version
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        state = (try? container.decode(String.self, forKey: .state)) ?? "unknown"
+        package_name = try? container.decodeIfPresent(String.self, forKey: .package_name)
+        channel = try? container.decodeIfPresent(String.self, forKey: .channel)
+        started_at = try? container.decodeIfPresent(String.self, forKey: .started_at)
+        finished_at = try? container.decodeIfPresent(String.self, forKey: .finished_at)
+        stdout = try? container.decodeIfPresent(String.self, forKey: .stdout)
+        stderr = try? container.decodeIfPresent(String.self, forKey: .stderr)
+        release_notes = try? container.decodeIfPresent(String.self, forKey: .release_notes)
+        installed_version = try? container.decodeIfPresent(String.self, forKey: .installed_version)
+
+        if let code = try? container.decodeIfPresent(Int.self, forKey: .return_code) {
+            return_code = code
+        } else if let codeString = try? container.decode(String.self, forKey: .return_code),
+                  let code = Int(codeString) {
+            return_code = code
+        } else {
+            return_code = nil
+        }
+    }
 }
 
 struct FetchUpdateRequest: Encodable {
