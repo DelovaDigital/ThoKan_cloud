@@ -69,9 +69,13 @@ function csrfToken() {
 
 function redirectToLogin() {
   if (typeof window === "undefined") return;
-  sessionStorage.setItem("auth_notice", "Sessie verlopen. Log opnieuw in om verder te gaan.");
-  sessionStorage.setItem("auth_notice_type", "warning");
-  window.location.replace("/login");
+  try {
+    sessionStorage.setItem("auth_notice", "Sessie verlopen. Log opnieuw in om verder te gaan.");
+    sessionStorage.setItem("auth_notice_type", "warning");
+  } catch {
+    // Ignore storage errors; redirect should still happen.
+  }
+  window.location.replace(`/login?r=${Date.now()}`);
 }
 
 export async function apiRaw(path: string, options?: RequestInit): Promise<Response> {
@@ -99,7 +103,11 @@ export async function apiRaw(path: string, options?: RequestInit): Promise<Respo
   }
 
   if (response.status === 401) {
-    localStorage.removeItem("access_token");
+    try {
+      localStorage.removeItem("access_token");
+    } catch {
+      // Ignore storage errors; redirect should still happen.
+    }
     redirectToLogin();
     throw new Error("Sessie verlopen. Log opnieuw in om verder te gaan.");
   }
@@ -138,7 +146,11 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   if (response.status === 401) {
-    localStorage.removeItem("access_token");
+    try {
+      localStorage.removeItem("access_token");
+    } catch {
+      // Ignore storage errors; redirect should still happen.
+    }
     redirectToLogin();
     throw new Error("Sessie verlopen. Log opnieuw in om verder te gaan.");
   }
@@ -178,7 +190,11 @@ export async function uploadFile(file: File, folderId?: string) {
   }
 
   if (response.status === 401) {
-    localStorage.removeItem("access_token");
+    try {
+      localStorage.removeItem("access_token");
+    } catch {
+      // Ignore storage errors; redirect should still happen.
+    }
     redirectToLogin();
     throw new Error("Sessie verlopen. Log opnieuw in om verder te gaan.");
   }
@@ -194,7 +210,12 @@ export async function uploadFile(file: File, folderId?: string) {
 export async function ensureSession(options?: { requireConfirmedAuth?: boolean }): Promise<boolean> {
   if (typeof window === "undefined") return false;
 
-  const accessToken = localStorage.getItem("access_token");
+  let accessToken: string | null = null;
+  try {
+    accessToken = localStorage.getItem("access_token");
+  } catch {
+    return false;
+  }
   if (!accessToken) return false;
 
   const requireConfirmedAuth = options?.requireConfirmedAuth === true;
@@ -208,9 +229,17 @@ export async function ensureSession(options?: { requireConfirmedAuth?: boolean }
     });
 
     if (response.status === 401) {
-      localStorage.removeItem("access_token");
-      sessionStorage.setItem("auth_notice", "Sessie verlopen. Log opnieuw in om verder te gaan.");
-      sessionStorage.setItem("auth_notice_type", "warning");
+      try {
+        localStorage.removeItem("access_token");
+      } catch {
+        // Ignore storage errors.
+      }
+      try {
+        sessionStorage.setItem("auth_notice", "Sessie verlopen. Log opnieuw in om verder te gaan.");
+        sessionStorage.setItem("auth_notice_type", "warning");
+      } catch {
+        // Ignore storage errors.
+      }
       return false;
     }
 
