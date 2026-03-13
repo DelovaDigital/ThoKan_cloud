@@ -22,7 +22,7 @@ struct UserResponse: Decodable {
 
 // MARK: - Dashboard Models
 
-struct DashboardResponse: Decodable {
+struct DashboardResponse: Codable {
     let used_bytes: Int
     let files_count: Int
     let system_info: SystemInfo?
@@ -30,7 +30,7 @@ struct DashboardResponse: Decodable {
     let recent_activity: [ActivityItem]?
 }
 
-struct SystemInfo: Decodable {
+struct SystemInfo: Codable {
     let hostname: String?
     let platform: String?
     let cpu_cores: Int?
@@ -39,7 +39,7 @@ struct SystemInfo: Decodable {
     let storage_free_gb: Double?
 }
 
-struct ActivityItem: Decodable {
+struct ActivityItem: Codable {
     let event_type: String?
     let entity_type: String?
     let entity_id: String?
@@ -48,13 +48,13 @@ struct ActivityItem: Decodable {
 
 // MARK: - Shopify Models
 
-struct ShopifyChatFeedResponse: Decodable {
+struct ShopifyChatFeedResponse: Codable {
     let events: [ShopifyChatEvent]
     let count: Int
     let orders_checked: Int
 }
 
-struct ShopifyChatEvent: Decodable {
+struct ShopifyChatEvent: Codable {
     let id: String
     let created_at: String
     let author: String
@@ -72,7 +72,7 @@ struct ShopifyChatEvent: Decodable {
 
 // MARK: - File Models
 
-struct FileItem: Decodable {
+struct FileItem: Codable {
     let id: String
     let name: String
     let folder_id: String?
@@ -82,14 +82,14 @@ struct FileItem: Decodable {
     let updated_at: String?
 }
 
-struct FolderItem: Decodable {
+struct FolderItem: Codable {
     let id: String
     let name: String
     let parent_id: String?
     let path: String
 }
 
-struct FilesListResponse: Decodable {
+struct FilesListResponse: Codable {
     let files: [FileItem]
     let folders: [FolderItem]
 }
@@ -126,11 +126,11 @@ struct MailConfigUpdateRequest: Encodable {
     let apply_to_all: Bool
 }
 
-struct MailInboxResponse: Decodable {
+struct MailInboxResponse: Codable {
     let messages: [MailMessage]
 }
 
-struct MailMessage: Decodable {
+struct MailMessage: Codable {
     let id: String
     let from: String
     let subject: String
@@ -163,6 +163,21 @@ struct MailReplyRequest: Encodable {
     let references: String
 }
 
+struct MailSendRequest: Encodable {
+    let to: String
+    let subject: String
+    let body: String
+}
+
+struct FolderCreateRequestPayload: Encodable {
+    let name: String
+    let parent_id: String?
+}
+
+struct MoveRequestPayload: Encodable {
+    let folder_id: String?
+}
+
 // MARK: - Admin Models
 
 struct AdminUserResponse: Decodable {
@@ -170,6 +185,29 @@ struct AdminUserResponse: Decodable {
     let email: String
     let full_name: String
     let is_active: Bool
+}
+
+struct AdminCreateUserRequest: Encodable {
+    let email: String
+    let full_name: String
+    let password: String
+    let role: String
+}
+
+struct AdminCreateUserResponse: Decodable {
+    let message: String
+    let email_sent: Bool?
+    let user_id: String?
+}
+
+struct AdminAuditLog: Decodable {
+    let id: String
+    let event_type: String
+    let entity_type: String?
+    let entity_id: String?
+    let actor_user_id: String?
+    let metadata: [String: String]?
+    let created_at: String
 }
 
 struct StorageUsageResponse: Decodable {
@@ -194,6 +232,10 @@ struct SystemInfoResponse: Decodable {
     let platform: String
     let cpu_cores: Int
     let python_version: String
+}
+
+struct HealthResponse: Decodable {
+    let status: String
 }
 
 struct UpdatePackageInfo: Decodable, Identifiable {

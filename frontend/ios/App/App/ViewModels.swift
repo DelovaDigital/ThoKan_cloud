@@ -2,6 +2,22 @@ import Foundation
 import Observation
 import UserNotifications
 
+private enum CacheKeys {
+    static let dashboard = "cache.dashboard"
+    static let files = "cache.files"
+    static let folders = "cache.folders"
+    static let mailInbox = "cache.mail.inbox"
+    static let shopifyFeed = "cache.shopify.feed"
+}
+
+private func isLikelyNetworkError(_ error: Error) -> Bool {
+    if case APIError.network = error {
+        return true
+    }
+    let message = error.localizedDescription.lowercased()
+    return message.contains("network") || message.contains("offline") || message.contains("cannot reach") || message.contains("timed out")
+}
+
 @Observable
 class AuthenticationViewModel {
     @ObservationIgnored
@@ -78,8 +94,14 @@ class DashboardViewModel {
         do {
             let data = try await apiClient.fetchDashboard()
             self.dashboard = data
+            CacheStore.shared.save(data, forKey: CacheKeys.dashboard)
         } catch {
-            self.errorMessage = error.localizedDescription
+            if let cached: DashboardResponse = CacheStore.shared.load(DashboardResponse.self, forKey: CacheKeys.dashboard) {
+                self.dashboard = cached
+                self.errorMessage = "Offline modus: cached dashboard getoond"
+            } else {
+                self.errorMessage = error.localizedDescription
+            }
         }
         
         isLoading = false
@@ -105,8 +127,15 @@ class ShopifyViewModel {
             let response = try await apiClient.fetchShopifyChatFeed()
             events = response.events
             ordersChecked = response.orders_checked
+            CacheStore.shared.save(response, forKey: CacheKeys.shopifyFeed)
         } catch {
-            errorMessage = error.localizedDescription
+            if let cached: ShopifyChatFeedResponse = CacheStore.shared.load(ShopifyChatFeedResponse.self, forKey: CacheKeys.shopifyFeed) {
+                events = cached.events
+                ordersChecked = cached.orders_checked
+                errorMessage = "Offline modus: cached Shopify feed getoond"
+            } else {
+                errorMessage = error.localizedDescription
+            }
         }
 
         isLoading = false
@@ -123,6 +152,8 @@ class FilesViewModel {
     var isLoading = false
     var errorMessage: String?
     var currentFolderId: String?
+
+    var operationMessage: String?
     
     @MainActor
     func fetchFiles(folderId: String? = nil) async {
@@ -134,10 +165,87 @@ class FilesViewModel {
             self.files = data.files
             self.folders = data.folders
             self.currentFolderId = folderId
+            CacheStore.shared.save(data.files, forKey: CacheKeys.files)
+            CacheStore.shared.save(data.folders, forKey: CacheKeys.folders)
         } catch {
-            self.errorMessage = error.localizedDescription
+            let cachedFiles: [FileItem] = CacheStore.shared.load([FileItem].self, forKey: CacheKeys.files) ?? []
+            let cachedFolders: [FolderItem] = CacheStore.shared.load([FolderItem].self, forKey: CacheKeys.folders) ?? []
+
+            if !cachedFiles.isEmpty || !cachedFolders.isEmpty {
+                if let folderId {
+                    self.files = cachedFiles.filter { $0.folder_id == folderId }
+                    self.folders = cachedFolders.filter { $0.parent_id == folderId }
+                } else {
+                    self.files = cachedFiles.filter { $0.folder_id == nil }
+                    self.folders = cachedFolders.filter { $0.parent_id == nil }
+                }
+                self.currentFolderId = folderId
+                self.errorMessage = "Offline modus: cached bestanden getoond"
+            } else {
+                self.errorMessage = error.localizedDescription
+            }
         }
         
+        isLoading = false
+    }
+
+    @MainActor
+    func createFolder(name: String, parentId: String?) async {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        isLoading = true
+        errorMessage = nil
+        operationMessage = nil
+
+        do {
+            _ = try await apiClient.createFolder(name: trimmed, parentId: parentId)
+            operationMessage = "Folder created"
+            await fetchFiles(folderId: parentId)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isLoading = false
+    }
+
+    @MainActor
+    func moveFile(fileId: String, to folderId: String?) async {
+        errorMessage = nil
+        operationMessage = nil
+        do {
+            _ = try await apiClient.moveFile(fileId: fileId, folderId: folderId)
+            operationMessage = "File moved"
+            await fetchFiles(folderId: currentFolderId)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    func uploadFile(from url: URL, to folderId: String?) async {
+        isLoading = true
+        errorMessage = nil
+        operationMessage = nil
+
+        do {
+            _ = try await apiClient.uploadFile(fileURL: url, folderId: folderId)
+            operationMessage = "File uploaded"
+            await fetchFiles(folderId: folderId)
+        } catch {
+            if isLikelyNetworkError(error) {
+                do {
+                    let staged = try OfflineFileStager.stageFileForRetry(sourceURL: url)
+                    await OfflineActionQueue.shared.enqueueUpload(localFilePath: staged.path, folderId: folderId)
+                    operationMessage = "Offline: upload queued for retry"
+                } catch {
+                    errorMessage = "Upload failed and queue staging failed: \(error.localizedDescription)"
+                }
+            } else {
+                errorMessage = error.localizedDescription
+            }
+        }
+
         isLoading = false
     }
     
@@ -185,11 +293,47 @@ class EmailViewModel {
         do {
             let response = try await apiClient.fetchMailInbox()
             self.messages = response.messages
+            CacheStore.shared.save(response, forKey: CacheKeys.mailInbox)
         } catch {
-            self.errorMessage = error.localizedDescription
+            if let cached: MailInboxResponse = CacheStore.shared.load(MailInboxResponse.self, forKey: CacheKeys.mailInbox) {
+                self.messages = cached.messages
+                self.errorMessage = "Offline modus: cached inbox getoond"
+            } else {
+                self.errorMessage = error.localizedDescription
+            }
         }
         
         isLoading = false
+    }
+
+    @MainActor
+    func sendMail(to: String, subject: String, body: String) async -> Bool {
+        let recipient = to.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !recipient.isEmpty else {
+            errorMessage = "Recipient is required"
+            return false
+        }
+
+        isLoading = true
+        errorMessage = nil
+        statusMessage = nil
+
+        do {
+            let response = try await apiClient.sendMail(MailSendRequest(to: recipient, subject: subject, body: body))
+            statusMessage = response.message
+            isLoading = false
+            return true
+        } catch {
+            if isLikelyNetworkError(error) {
+                await OfflineActionQueue.shared.enqueueMail(to: recipient, subject: subject, body: body)
+                statusMessage = "Offline: message queued and will retry automatically"
+                isLoading = false
+                return true
+            }
+            errorMessage = error.localizedDescription
+            isLoading = false
+            return false
+        }
     }
     
     @MainActor
@@ -267,23 +411,63 @@ class AdminViewModel {
     var storageUsage: [StorageUsageResponse] = []
     var isLoading = false
     var errorMessage: String?
+    var statusMessage: String?
+    var auditLogs: [AdminAuditLog] = []
     
     @MainActor
     func fetchAdminData() async {
         isLoading = true
         errorMessage = nil
+        statusMessage = nil
         
         async let usersTask = apiClient.fetchAdminUsers()
         async let storageTask = apiClient.fetchStorageUsage()
+        async let auditTask = apiClient.fetchAuditLogs(limit: 60)
         
         do {
             self.users = try await usersTask
             self.storageUsage = try await storageTask
+            self.auditLogs = try await auditTask
         } catch {
             self.errorMessage = error.localizedDescription
         }
         
         isLoading = false
+    }
+
+    @MainActor
+    func createUser(email: String, fullName: String, password: String, role: String) async {
+        errorMessage = nil
+        statusMessage = nil
+
+        do {
+            let response = try await apiClient.createAdminUser(
+                AdminCreateUserRequest(
+                    email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                    full_name: fullName.trimmingCharacters(in: .whitespacesAndNewlines),
+                    password: password,
+                    role: role
+                )
+            )
+            statusMessage = response.message
+            await fetchAdminData()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    func deleteUser(_ user: AdminUserResponse) async {
+        errorMessage = nil
+        statusMessage = nil
+
+        do {
+            let response = try await apiClient.deleteAdminUser(userId: user.id)
+            statusMessage = response.message
+            await fetchAdminData()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 
@@ -488,5 +672,62 @@ class SettingsViewModel {
 
         lastNotifiedUpdateCount = packageCount
         UserDefaults.standard.set(packageCount, forKey: "lastUpdateNotificationCount")
+    }
+}
+
+@Observable
+class WorkspaceStatusViewModel {
+    @ObservationIgnored
+    private let apiClient = APIClient.shared
+
+    var cloudReachable = false
+    var healthStatus = "Unknown"
+    var hostName = "-"
+    var pythonVersion = "-"
+    var updateState = "unknown"
+    var lastUpdatedAt = "Never"
+    var lastRefreshedAt = "Never"
+    var queuedMailCount = 0
+    var queuedUploadCount = 0
+    var isRefreshing = false
+    var errorMessage: String?
+
+    @MainActor
+    func refresh() async {
+        isRefreshing = true
+        errorMessage = nil
+
+        do {
+            async let healthTask = apiClient.fetchHealthStatus()
+            async let systemTask = apiClient.fetchSystemInfo()
+            async let updateTask = apiClient.fetchUpdateStatus()
+
+            let health = try await healthTask
+            let system = try await systemTask
+            let update = try await updateTask
+
+            cloudReachable = health.status.lowercased() == "ok"
+            healthStatus = health.status
+            hostName = system.hostname
+            pythonVersion = system.python_version
+            updateState = update.state
+            if let finishedAt = update.finished_at, !finishedAt.isEmpty {
+                lastUpdatedAt = finishedAt
+            }
+
+            let queue = await OfflineActionQueue.shared.snapshot()
+            queuedMailCount = queue.mailActions.count
+            queuedUploadCount = queue.uploadActions.count
+        } catch {
+            cloudReachable = false
+            errorMessage = error.localizedDescription
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        lastRefreshedAt = formatter.string(from: Date())
+
+        isRefreshing = false
     }
 }

@@ -1522,319 +1522,59 @@ Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
             </div>
           }
         >
-              <p className="mt-1 text-sm opacity-60">Na een push naar GitHub publiceert de update-workflow een pakket en manifest. Cloud downloadt dat pakket hier en draait na installatie altijd de productie-herbouw.</p>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
             <div className="rounded-2xl border border-border bg-card/30 p-4">
-              <p className="text-xs font-medium uppercase tracking-[0.16em] opacity-50">Geïnstalleerde versie</p>
+              <p className="text-xs font-medium uppercase tracking-[0.16em] opacity-50">Huidige versie</p>
               <p className="mt-2 text-2xl font-bold">{updateStatus?.installed_version ? `v${updateStatus.installed_version}` : "Onbekend"}</p>
-              <p className="mt-1 text-xs opacity-50 break-all">{updateStatus?.installed_package_name || ""}</p>
             </div>
             <div className="rounded-2xl border border-border bg-card/30 p-4">
-              <p className="text-xs font-medium uppercase tracking-[0.16em] opacity-50">Build (jaar-maand-dag)</p>
-              <p className="mt-2 text-lg font-semibold">{updateStatus?.installed_build_date || getBuildDateFromPackageName(updateStatus?.installed_package_name)}</p>
-            </div>
-            <div className="rounded-2xl border border-border bg-card/30 p-4">
-              <p className="text-xs font-medium uppercase tracking-[0.16em] opacity-50">Laatste run</p>
-              <p className="mt-2 text-lg font-semibold">{updateStatus?.state || "idle"}</p>
-              <p className="mt-1 text-xs opacity-60">{updateStatus?.finished_at ? new Date(updateStatus.finished_at).toLocaleString() : "Nog geen update uitgevoerd"}</p>
-            </div>
-          </div>
-
-          <div className="mt-4 grid gap-3 rounded-[1.5rem] border border-border bg-card/30 p-4 md:grid-cols-2">
-            <div>
-              <label className="block text-sm font-medium">Updatekanaal</label>
-              <select
-                value={updateChannel}
-                onChange={(e) => { setUpdateChannel(e.target.value as "stable" | "beta"); setCheckResult(null); }}
-                className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
-              >
-                <option value="stable">stable</option>
-                <option value="beta">beta</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium">Laatste bron-URL ({updateChannel})</label>
-              <input
-                type="text"
-                value={updateChannel === "stable" ? updateConfig?.stable_source_url || "" : updateConfig?.beta_source_url || ""}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setUpdateConfig((prev) => {
-                    if (!prev) return prev;
-                    return updateChannel === "stable"
-                      ? { ...prev, stable_source_url: value }
-                      : { ...prev, beta_source_url: value };
-                  });
-                }}
-                placeholder="https://raw.githubusercontent.com/AlessioD200/ThoKan_cloud/update-channel/stable/latest.json"
-                className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
-              />
-              <p className="mt-1 text-xs opacity-60">Ondersteunt direct archive URL (.zip/.tar/.tar.gz/.tgz) of manifest .json met package_url. De standaardworkflow publiceert naar de GitHub branch update-channel.</p>
-            </div>
-            <label className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
-              <input
-                type="checkbox"
-                checked={Boolean(updateConfig?.auto_check_updates)}
-                onChange={(e) => setUpdateConfig((prev) => (prev ? { ...prev, auto_check_updates: e.target.checked } : prev))}
-              />
-              Automatisch controleren op updates
-            </label>
-            <label className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
-              <input
-                type="checkbox"
-                checked={Boolean(updateConfig?.auto_install_nightly)}
-                onChange={(e) => setUpdateConfig((prev) => (prev ? { ...prev, auto_install_nightly: e.target.checked } : prev))}
-              />
-              's Nachts automatisch installeren
-            </label>
-            <div>
-              <label className="block text-sm font-medium">Nacht-installatie uur</label>
-              <input
-                type="number"
-                min={0}
-                max={23}
-                value={updateConfig?.nightly_install_hour ?? 3}
-                onChange={(e) =>
-                  setUpdateConfig((prev) =>
-                    prev ? { ...prev, nightly_install_hour: Math.max(0, Math.min(23, Number(e.target.value) || 0)) } : prev
-                  )
-                }
-                className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
-              />
-              <p className="mt-1 text-xs opacity-60">Actief tijdsvenster: {formatNightlyWindow(updateConfig?.nightly_install_hour ?? 3)}</p>
-            </div>
-            <label className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
-              <input
-                type="checkbox"
-                checked={Boolean(updateConfig?.auto_rebuild_docker)}
-                onChange={(e) => setUpdateConfig((prev) => (prev ? { ...prev, auto_rebuild_docker: e.target.checked } : prev))}
-              />
-              Auto Docker rebuild na update
-            </label>
-            <label className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
-              <input
-                type="checkbox"
-                checked={Boolean(updateConfig?.auto_update_ubuntu)}
-                onChange={(e) => setUpdateConfig((prev) => (prev ? { ...prev, auto_update_ubuntu: e.target.checked } : prev))}
-              />
-              Auto Ubuntu updates na update
-            </label>
-            <div className="md:col-span-2 flex flex-wrap gap-2">
-              <button
-                onClick={saveUpdateConfig}
-                disabled={!updateConfig || updateBusy}
-                className="rounded-2xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-              >
-                {updateBusy ? "Opslaan..." : "Update-instellingen opslaan"}
-              </button>
-              <button
-                onClick={checkAndFetchLatestUpdate}
-                disabled={fetchBusy || !updateConfig}
-                className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-2 text-sm font-medium transition hover:bg-accent/10 disabled:opacity-50"
-              >
-                <ArrowUpRight className="h-4 w-4" />
-                {fetchBusy
-                  ? "Controleren..."
-                  : checkResult?.up_to_date
-                  ? "✓ Al up-to-date"
-                  : "Update controleren"}
-              </button>
-              {updatePrompt && !updateConfig?.auto_install_nightly && (
-                <button
-                  onClick={() => void fetchLatestUpdate()}
-                  disabled={fetchBusy || updateBusy}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-                >
-                  Nu installeren
-                </button>
-              )}
-            </div>
-          </div>
-
-          {updatePrompt && (
-            <div className="mt-4 rounded-[1.5rem] border border-accent/30 bg-accent/10 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold">Update beschikbaar {updatePrompt.version ? `(v${updatePrompt.version})` : ""}</p>
-                  <p className="mt-1 text-xs opacity-70">
-                    Huidige versie: {updatePrompt.installedVersion ? `v${updatePrompt.installedVersion}` : "onbekend"}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setUpdatePrompt(null)}
-                  className="rounded-lg border border-border bg-card px-2 py-1 text-xs transition hover:bg-card/70"
-                  aria-label="Melding sluiten"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              {updatePrompt.notes && (
-                <div className="mt-3 rounded-xl border border-border bg-card/40 p-3">
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-wider opacity-60">Releasenotes</p>
-                  <pre className="whitespace-pre-wrap text-xs leading-relaxed">{updatePrompt.notes}</pre>
-                </div>
-              )}
-              {updateConfig?.auto_install_nightly ? (
-                <p className="mt-3 text-xs opacity-70">
-                  Nacht-update ingeschakeld: deze update wordt automatisch verwerkt in venster {formatNightlyWindow(updateConfig?.nightly_install_hour ?? 3)}.
-                </p>
-              ) : null}
-            </div>
-          )}
-
-          <p className="mt-3 text-xs opacity-60">Vaste nabehandeling na een succesvolle update: sudo docker compose -f docker-compose.prod.yml up -d --build</p>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
-            <input
-              type="file"
-              accept=".zip,.tar,.tar.gz,.tgz"
-              onChange={(e) => setUpdateFile(e.target.files?.[0] || null)}
-              className="rounded-xl border border-border bg-card px-3 py-2 text-sm"
-            />
-            <button
-              onClick={uploadUpdatePackage}
-              disabled={!updateFile || updateBusy}
-              className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-            >
-              {updateBusy ? "Uploaden..." : "Pakket uploaden"}
-            </button>
-          </div>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto_auto]">
-            <select
-              value={selectedPackage}
-              onChange={(e) => setSelectedPackage(e.target.value)}
-              className="rounded-xl border border-border bg-card px-3 py-2 text-sm"
-            >
-              <option value="">Selecteer updatepakket ({updateChannel})</option>
-              {channelPackages.map((pkg) => (
-                <option key={pkg.name} value={pkg.name}>
-                  {pkg.version ? `v${pkg.version} ` : ""}{getBuildDateFromPackageName(pkg.name)} [{pkg.channel || "handmatig"}]
-                </option>
-              ))}
-            </select>
-            <label className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
-              <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
-              Proefdraaien (geen wijzigingen)
-            </label>
-            <button
-              onClick={applyUpdate}
-              disabled={!selectedPackage || updateBusy}
-              className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-            >
-              {updateBusy ? "Toepassen..." : "Update toepassen"}
-            </button>
-          </div>
-
-          {selectedPackage && (() => {
-            const pkg = channelPackages.find((p) => p.name === selectedPackage);
-            const targetVersion = pkg?.version;
-            return targetVersion ? (
-              <p className="mt-2 text-sm opacity-70">
-                Zou updaten naar: <span className="font-semibold">v{targetVersion}</span>
-                {updateStatus?.installed_version && updateStatus.installed_version !== targetVersion && (
-                  <span className="ml-1 opacity-60">(huidig: v{updateStatus.installed_version})</span>
-                )}
+              <p className="text-xs font-medium uppercase tracking-[0.16em] opacity-50">Beschikbare versie</p>
+              <p className="mt-2 text-2xl font-bold">
+                {checkResult?.up_to_date
+                  ? "Geen update"
+                  : updatePrompt?.version
+                  ? `v${updatePrompt.version}`
+                  : checkResult?.version
+                  ? `v${checkResult.version}`
+                  : "Nog niet gecontroleerd"}
               </p>
-            ) : null;
-          })()}
+            </div>
+          </div>
 
-          {aptStatus !== null && (
-            <div className={`mt-4 rounded-[1.5rem] border p-4 text-sm ${aptStatus.upgradable > 0 ? "border-yellow-500/40 bg-yellow-500/10" : "border-border bg-card/30"}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1">
-                  <p className="font-medium">
-                    {aptStatus.upgradable > 0
-                      ? `${aptStatus.upgradable} Debian/Ubuntu-pakket${aptStatus.upgradable === 1 ? "" : "ten"} kunnen worden bijgewerkt`
-                      : "Systeem apt-pakketten zijn up-to-date"}
-                  </p>
-                  {aptStatus.upgradable > 0 && (
-                    <p className="mt-1 text-xs opacity-70 line-clamp-2">
-                      {aptStatus.packages.slice(0, 6).map((p) => p.split("/")[0]).join(", ")}
-                      {aptStatus.packages.length > 6 ? ` en ${aptStatus.packages.length - 6} meer` : ""}
-                    </p>
-                  )}
-                  <p className="mt-1 text-xs opacity-50">Gecheckt: {new Date(aptStatus.checked_at).toLocaleString()}</p>
-                </div>
-                <div className="flex shrink-0 flex-col gap-2 items-end">
-                  {aptStatus.upgradable > 0 && (
-                    <button
-                      onClick={applyAptUpgrade}
-                      disabled={aptBusy || updateBusy}
-                      className="rounded-xl bg-yellow-500 px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-                    >
-                      {aptBusy ? "Bijwerken..." : "Systeem bijwerken"}
-                    </button>
-                  )}
-                  <button
-                    onClick={async () => {
-                      setAptBusy(true);
-                      try {
-                        const data = await api<AptStatus>("/system/update/apt-refresh", { method: "POST" });
-                        setAptStatus(data);
-                      } catch { /* swallow */ }
-                      setAptBusy(false);
-                    }}
-                    disabled={aptBusy}
-                    className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs transition hover:bg-accent/10 disabled:opacity-50"
-                  >
-                    {aptBusy ? "Laden..." : "Vernieuwen"}
-                  </button>
-                </div>
-              </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              onClick={checkAndFetchLatestUpdate}
+              disabled={fetchBusy}
+              className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-2 text-sm font-medium transition hover:bg-accent/10 disabled:opacity-50"
+            >
+              <ArrowUpRight className="h-4 w-4" />
+              {fetchBusy ? "Controleren..." : "Update controleren"}
+            </button>
+            {updatePrompt && (
+              <button
+                onClick={() => void fetchLatestUpdate()}
+                disabled={updateBusy || fetchBusy}
+                className="inline-flex items-center gap-2 rounded-2xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+              >
+                {updateBusy ? "Installeren..." : "Update installeren"}
+              </button>
+            )}
+          </div>
+
+          {updatePrompt?.notes && (
+            <div className="mt-4 rounded-xl border border-border bg-card/40 p-3">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wider opacity-60">Releasenotes</p>
+              <pre className="whitespace-pre-wrap text-xs leading-relaxed">{updatePrompt.notes}</pre>
             </div>
           )}
 
-          {(updateBusy || aptBusy || updateStatus) && (
-            <div className="mt-4 rounded-[1.5rem] border border-border bg-card/30 p-4 text-sm">
-              {(updateBusy || aptBusy || updateStatus?.state === "running") && (
-                <div className="mb-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-medium opacity-70">{updateStatus?.progress_step || "Bezig..."}</p>
-                    <p className="text-xs opacity-50">{updateStatus?.progress ?? 0}%</p>
-                  </div>
-                  <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-card/60">
-                    <div
-                      className="h-full rounded-full bg-accent transition-all duration-700"
-                      style={{ width: `${updateStatus?.progress ?? 0}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-              {updateStatus && (
-                <>
-                  <p>
-                    Status:{" "}
-                    <span className={`font-medium ${updateStatus.state === "success" ? "text-green-500" : updateStatus.state === "failed" ? "text-red-400" : ""}`}>
-                      {updateStatus.state}
-                    </span>
-                  </p>
-                  {updateStatus.channel && <p className="mt-1">Kanaal: {updateStatus.channel}</p>}
-                  {updateStatus.package_name && (
-                    <p className="mt-1">Pakket: {updateStatus.package_name} (build {getBuildDateFromPackageName(updateStatus.package_name)})</p>
-                  )}
-                  {typeof updateStatus.return_code === "number" && <p className="mt-1">Returncode: {updateStatus.return_code}</p>}
-                  {updateStatus.started_at && <p className="mt-1 opacity-70">Gestart: {new Date(updateStatus.started_at).toLocaleString()}</p>}
-                  {updateStatus.finished_at && <p className="mt-1 opacity-70">Afgerond: {new Date(updateStatus.finished_at).toLocaleString()}</p>}
-                  {updateStatus.release_notes && (
-                    <div className="mt-3 rounded-xl border border-border bg-card/40 p-3">
-                      <p className="mb-1 text-xs font-semibold uppercase tracking-wider opacity-50">Releasenotes</p>
-                      <pre className="whitespace-pre-wrap text-xs leading-relaxed">{updateStatus.release_notes}</pre>
-                    </div>
-                  )}
-                  {updateStatus.stderr && (
-                    <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-black/20 p-3 text-xs text-red-300">
-                      {updateStatus.stderr}
-                    </pre>
-                  )}
-                  {updateStatus.stdout && (
-                    <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-black/20 p-3 text-xs">
-                      {updateStatus.stdout}
-                    </pre>
-                  )}
-                </>
-              )}
+          {status && (
+            <p className="mt-3 text-sm opacity-75">{status}</p>
+          )}
+
+          {(updateBusy || updateStatus?.state === "running") && (
+            <div className="mt-4 rounded-xl border border-border bg-card/30 p-3 text-sm">
+              <p className="opacity-70">{updateStatus?.progress_step || "Update bezig..."}</p>
             </div>
           )}
         </SectionShell>

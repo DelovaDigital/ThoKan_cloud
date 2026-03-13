@@ -149,8 +149,62 @@ class APIClient: NSObject {
         return try await request(URLRequest(url: URL(string: "\(baseURL)/admin/storage-usage")!))
     }
 
+    func createAdminUser(_ payload: AdminCreateUserRequest) async throws -> AdminCreateUserResponse {
+        let url = URL(string: "\(baseURL)/admin/users")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = try JSONEncoder().encode(payload)
+        return try await self.request(request)
+    }
+
+    func deleteAdminUser(userId: String) async throws -> MessageResponse {
+        let url = URL(string: "\(baseURL)/admin/users/\(userId)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        return try await self.request(request)
+    }
+
+    func fetchAuditLogs(limit: Int = 50) async throws -> [AdminAuditLog] {
+        let url = URL(string: "\(baseURL)/admin/audit-logs?limit=\(max(1, limit))")!
+        return try await request(URLRequest(url: url))
+    }
+
+    func registerDeviceToken(_ token: String) async throws -> MessageResponse {
+        let url = URL(string: "\(baseURL)/notifications/device-token")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["token": token], options: [])
+        return try await self.request(request)
+    }
+
+    func unregisterDeviceToken(_ token: String? = nil) async throws -> MessageResponse {
+        let url = URL(string: "\(baseURL)/notifications/device-token")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        let payload: [String: String] = token == nil ? [:] : ["token": token!]
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [])
+        return try await self.request(request)
+    }
+
+    func sendPushTest(title: String, body: String, targetTab: Int = 0) async throws -> MessageResponse {
+        let url = URL(string: "\(baseURL)/notifications/test")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "title": title,
+            "body": body,
+            "target_tab": targetTab,
+        ], options: [])
+        return try await self.request(request)
+    }
+
     func fetchSystemInfo() async throws -> SystemInfoResponse {
         return try await request(URLRequest(url: URL(string: "\(baseURL)/system/info")!))
+    }
+
+    func fetchHealthStatus() async throws -> HealthResponse {
+        let healthURL = URL(string: "\(baseURL.replacingOccurrences(of: "/api/v1", with: ""))/health")!
+        return try await requestWithoutAuth(URLRequest(url: healthURL))
     }
 
     func fetchUpdatePackages() async throws -> [UpdatePackageInfo] {
@@ -211,6 +265,84 @@ class APIClient: NSObject {
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = "POST"
         return try await request(urlRequest)
+    }
+
+    func sendMail(_ payload: MailSendRequest) async throws -> MessageResponse {
+        let url = URL(string: "\(baseURL)/mail/send")!
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.httpBody = try JSONEncoder().encode(payload)
+        return try await request(urlRequest)
+    }
+
+    func createFolder(name: String, parentId: String?) async throws -> FolderItem {
+        let url = URL(string: "\(baseURL)/folders")!
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.httpBody = try JSONEncoder().encode(FolderCreateRequestPayload(name: name, parent_id: parentId))
+        return try await request(urlRequest)
+    }
+
+    func moveFile(fileId: String, folderId: String?) async throws -> FileItem {
+        let url = URL(string: "\(baseURL)/files/\(fileId)/move")!
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "PATCH"
+        urlRequest.httpBody = try JSONEncoder().encode(MoveRequestPayload(folder_id: folderId))
+        return try await request(urlRequest)
+    }
+
+    func moveFolder(folderId: String, parentFolderId: String?) async throws -> FolderItem {
+        let url = URL(string: "\(baseURL)/folders/\(folderId)/move")!
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "PATCH"
+        urlRequest.httpBody = try JSONEncoder().encode(MoveRequestPayload(folder_id: parentFolderId))
+        return try await request(urlRequest)
+    }
+
+    func uploadFile(fileURL: URL, folderId: String?) async throws -> FileItem {
+        let data = try Data(contentsOf: fileURL)
+        let boundary = "Boundary-\(UUID().uuidString)"
+        let query = folderId != nil ? "?folder_id=\(folderId!)" : ""
+        let url = URL(string: "\(baseURL)/files/upload\(query)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 60
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        let fileName = fileURL.lastPathComponent
+        let mimeType = mimeTypeForFileExtension(fileURL.pathExtension)
+
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"upload\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+
+        let (responseData, response) = try await perform(request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            if httpResponse.statusCode == 401 {
+                accessToken = nil
+                throw APIError.unauthorized
+            }
+            let error = try? JSONDecoder().decode([String: String].self, from: responseData)
+            throw APIError.server(error?["detail"] ?? "Upload failed")
+        }
+
+        do {
+            return try JSONDecoder().decode(FileItem.self, from: responseData)
+        } catch {
+            throw APIError.decoding(error.localizedDescription)
+        }
     }
 
     func downloadFile(fileId: String, fileName: String) async throws -> URL {
@@ -308,6 +440,22 @@ class APIClient: NSObject {
             }
         } catch {
             throw error
+        }
+    }
+
+    private func mimeTypeForFileExtension(_ ext: String) -> String {
+        switch ext.lowercased() {
+        case "png": return "image/png"
+        case "jpg", "jpeg": return "image/jpeg"
+        case "pdf": return "application/pdf"
+        case "txt": return "text/plain"
+        case "json": return "application/json"
+        case "csv": return "text/csv"
+        case "doc": return "application/msword"
+        case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        case "xls": return "application/vnd.ms-excel"
+        case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        default: return "application/octet-stream"
         }
     }
 }

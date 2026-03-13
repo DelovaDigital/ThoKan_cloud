@@ -7,64 +7,332 @@ import WebKit
 // MARK: - Dashboard Tab
 
 struct DashboardTab: View {
+    @Environment(AuthenticationViewModel.self) private var authViewModel
+    @Binding var selectedTab: Int
     @State private var viewModel = DashboardViewModel()
+    @State private var filesViewModel = FilesViewModel()
+    @State private var mailViewModel = EmailViewModel()
+    @State private var shopifyViewModel = ShopifyViewModel()
+    @State private var statusViewModel = WorkspaceStatusViewModel()
+    @State private var workspaceQuery = ""
+
+    private var isAdmin: Bool {
+        authViewModel.currentUser?.roles.contains("admin") == true
+    }
+
+    private var storageSummary: String {
+        guard let dashboard = viewModel.dashboard else { return "Unknown" }
+        return ByteCountFormatter().string(fromByteCount: Int64(dashboard.used_bytes))
+    }
+
+    private var fileTotal: Int {
+        filesViewModel.files.count + filesViewModel.folders.count
+    }
+
+    private var unreadMail: Int {
+        mailViewModel.messages.filter { !($0.is_read ?? true) }.count
+    }
+
+    private var recentActivity: [ActivityItem] {
+        Array((viewModel.dashboard?.recent_activity ?? []).prefix(6))
+    }
+
+    private var filteredFiles: [FileItem] {
+        let query = workspaceQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return [] }
+        return filesViewModel.files.filter {
+            $0.name.lowercased().contains(query) || $0.mime_type.lowercased().contains(query)
+        }.prefix(5).map { $0 }
+    }
+
+    private var filteredMessages: [MailMessage] {
+        let query = workspaceQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return [] }
+        return mailViewModel.messages.filter {
+            $0.subject.lowercased().contains(query) || $0.from.lowercased().contains(query) || $0.snippet.lowercased().contains(query)
+        }.prefix(5).map { $0 }
+    }
+
+    private var filteredEvents: [ShopifyChatEvent] {
+        let query = workspaceQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return [] }
+        return shopifyViewModel.events.filter {
+            $0.order_name.lowercased().contains(query)
+            || $0.customer_name.lowercased().contains(query)
+            || $0.email.lowercased().contains(query)
+            || $0.message.lowercased().contains(query)
+        }.prefix(5).map { $0 }
+    }
+
+    private var quickActions: [(title: String, subtitle: String, icon: String, tab: Int)] {
+        var actions: [(title: String, subtitle: String, icon: String, tab: Int)] = [
+            ("Files", "Upload, preview en delen", "folder.fill", 1),
+            ("Shopify", "Order en chat events", "message.fill", 2),
+            ("Mail", "Inbox en antwoorden", "envelope.fill", 3),
+            ("Settings", "Connecties en updates", "gearshape.fill", isAdmin ? 5 : 4),
+        ]
+
+        if isAdmin {
+            actions.append(("Admin", "Users en storage", "person.2.fill", 4))
+        }
+
+        return actions
+    }
+
+    @MainActor
+    private func loadWorkspace() async {
+        async let dashboardTask: Void = viewModel.fetchDashboard()
+        async let filesTask: Void = filesViewModel.fetchFiles()
+        async let mailTask: Void = mailViewModel.fetchInbox()
+        async let shopifyTask: Void = shopifyViewModel.fetchFeed()
+        async let statusTask: Void = statusViewModel.refresh()
+
+        _ = await (dashboardTask, filesTask, mailTask, shopifyTask, statusTask)
+    }
     
     var body: some View {
         NavigationStack {
-            Group {
-                if viewModel.isLoading {
-                    ProgressView("Loading dashboard...")
-                } else if let dashboard = viewModel.dashboard {
-                    List {
-                        Section("Storage") {
-                            LabeledContent("Used") {
-                                Text(ByteCountFormatter().string(fromByteCount: Int64(dashboard.used_bytes)))
-                            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Cloud Workspace")
+                            .font(.largeTitle.bold())
+                        Text("Alles centraal: storage, mail, events en beheer in één native app.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
 
-                            LabeledContent("Files") {
-                                Text("\(dashboard.files_count)")
-                            }
+                    CloudHeroCard(
+                        title: "Live overzicht",
+                        subtitle: "\(mailViewModel.messages.count) mails • \(shopifyViewModel.events.count) shopify events",
+                        badges: [
+                            ("Storage", storageSummary),
+                            ("Items", "\(fileTotal)"),
+                            ("Unread", "\(unreadMail)"),
+                        ]
+                    )
 
-                            if let totalStorage = dashboard.system_info?.storage_total_gb {
-                                ProgressView(value: Double(dashboard.used_bytes), total: totalStorage * 1_000_000_000)
-                            }
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Realtime status")
+                                .font(.headline)
+                            Spacer()
+                            Circle()
+                                .fill(statusViewModel.cloudReachable ? Color.green : Color.red)
+                                .frame(width: 10, height: 10)
                         }
 
-                        if let sysInfo = dashboard.system_info {
-                            Section("System") {
-                                InfoRow(label: "Hostname", value: sysInfo.hostname ?? "Unknown")
-                                InfoRow(label: "Platform", value: sysInfo.platform ?? "Unknown")
-                                InfoRow(label: "CPU Cores", value: "\(sysInfo.cpu_cores ?? 0)")
-                            }
-                        }
+                        InfoRow(label: "Health", value: statusViewModel.healthStatus)
+                        InfoRow(label: "Host", value: statusViewModel.hostName)
+                        InfoRow(label: "Python", value: statusViewModel.pythonVersion)
+                        InfoRow(label: "Update state", value: statusViewModel.updateState)
+                        InfoRow(label: "Last update", value: statusViewModel.lastUpdatedAt)
+                        InfoRow(label: "Last check", value: statusViewModel.lastRefreshedAt)
+                        InfoRow(label: "Queued mails", value: "\(statusViewModel.queuedMailCount)")
+                        InfoRow(label: "Queued uploads", value: "\(statusViewModel.queuedUploadCount)")
 
-                        if let files = dashboard.recent_files, !files.isEmpty {
-                            Section("Recent Files") {
-                                ForEach(files, id: \.id) { file in
-                                    FileRow(file: file)
+                        if let statusError = statusViewModel.errorMessage {
+                            Text(statusError)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                    }
+                    .cloudCardStyle()
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Snelle acties")
+                            .font(.headline)
+
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                            ForEach(Array(quickActions.enumerated()), id: \.offset) { _, action in
+                                Button {
+                                    selectedTab = action.tab
+                                } label: {
+                                    CloudActionCard(title: action.title, subtitle: action.subtitle, icon: action.icon)
                                 }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
-                } else {
-                    ContentUnavailableView("No dashboard data", systemImage: "rectangle.stack", description: Text("Pull to refresh or try again later."))
+
+                    if !workspaceQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Zoekresultaten")
+                                .font(.headline)
+
+                            if filteredFiles.isEmpty && filteredMessages.isEmpty && filteredEvents.isEmpty {
+                                Text("Geen resultaten gevonden in files, mail of Shopify.")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            if !filteredFiles.isEmpty {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Label("Files", systemImage: "folder")
+                                        .font(.subheadline.weight(.semibold))
+                                    ForEach(filteredFiles, id: \.id) { file in
+                                        Button {
+                                            selectedTab = 1
+                                        } label: {
+                                            HStack {
+                                                Text(file.name)
+                                                    .lineLimit(1)
+                                                Spacer()
+                                                Image(systemName: "arrow.right")
+                                                    .font(.caption)
+                                            }
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+
+                            if !filteredMessages.isEmpty {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Label("Mail", systemImage: "envelope")
+                                        .font(.subheadline.weight(.semibold))
+                                    ForEach(filteredMessages, id: \.id) { message in
+                                        Button {
+                                            selectedTab = 3
+                                        } label: {
+                                            HStack {
+                                                Text(message.subject.isEmpty ? "(No subject)" : message.subject)
+                                                    .lineLimit(1)
+                                                Spacer()
+                                                Image(systemName: "arrow.right")
+                                                    .font(.caption)
+                                            }
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+
+                            if !filteredEvents.isEmpty {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Label("Shopify", systemImage: "message")
+                                        .font(.subheadline.weight(.semibold))
+                                    ForEach(filteredEvents, id: \.id) { event in
+                                        Button {
+                                            selectedTab = 2
+                                        } label: {
+                                            HStack {
+                                                Text(event.order_name.isEmpty ? event.message : event.order_name)
+                                                    .lineLimit(1)
+                                                Spacer()
+                                                Image(systemName: "arrow.right")
+                                                    .font(.caption)
+                                            }
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                        }
+                        .cloudCardStyle()
+                    }
+
+                    if let dashboard = viewModel.dashboard,
+                       let totalStorage = dashboard.system_info?.storage_total_gb {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Storage gebruik")
+                                .font(.headline)
+                            ProgressView(value: Double(dashboard.used_bytes), total: totalStorage * 1_000_000_000)
+                                .tint(.blue)
+                            Text("\(storageSummary) van \(String(format: "%.1f", totalStorage)) GB")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .cloudCardStyle()
+                    }
+
+                    if !recentActivity.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Recente activiteit")
+                                .font(.headline)
+
+                            ForEach(Array(recentActivity.enumerated()), id: \.offset) { _, activity in
+                                HStack(alignment: .top, spacing: 10) {
+                                    Image(systemName: "bolt.horizontal.circle.fill")
+                                        .foregroundStyle(.blue)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(activity.event_type?.capitalized ?? "Event")
+                                            .font(.subheadline.weight(.semibold))
+                                        Text(activity.entity_type?.capitalized ?? "Entity")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Text(activity.created_at ?? "")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        }
+                        .cloudCardStyle()
+                    }
+
+                    if let files = viewModel.dashboard?.recent_files, !files.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Recent files")
+                                .font(.headline)
+                            ForEach(files.prefix(5), id: \.id) { file in
+                                FileRow(file: file)
+                                    .padding(.vertical, 2)
+                            }
+                        }
+                        .cloudCardStyle()
+                    }
+
+                    if let sysInfo = viewModel.dashboard?.system_info {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("System")
+                                .font(.headline)
+                            InfoRow(label: "Hostname", value: sysInfo.hostname ?? "Unknown")
+                            InfoRow(label: "Platform", value: sysInfo.platform ?? "Unknown")
+                            InfoRow(label: "CPU", value: "\(sysInfo.cpu_cores ?? 0) cores")
+                        }
+                        .cloudCardStyle()
+                    }
+
+                    if viewModel.dashboard == nil && !viewModel.isLoading {
+                        ContentUnavailableView(
+                            "No cloud data",
+                            systemImage: "externaldrive.badge.exclamationmark",
+                            description: Text("Pull to refresh and verify your API connection.")
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 24)
+                    }
                 }
+                .padding()
             }
+            .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("Dashboard")
+            .searchable(text: $workspaceQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Zoek files, mail of Shopify")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: {
                         Task {
-                            await viewModel.fetchDashboard()
+                            await loadWorkspace()
                         }
                     }) {
                         Image(systemName: "arrow.clockwise")
                     }
                 }
             }
+            .refreshable {
+                await loadWorkspace()
+            }
+            .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { _ in
+                Task {
+                    await statusViewModel.refresh()
+                }
+            }
         }
         .task {
-            await viewModel.fetchDashboard()
+            await loadWorkspace()
         }
     }
 }
@@ -74,6 +342,10 @@ struct DashboardTab: View {
 struct FilesTab: View {
     @State private var viewModel = FilesViewModel()
     @State private var folderStack: [FolderItem] = []
+    @State private var isCreateFolderPresented = false
+    @State private var newFolderName = ""
+    @State private var isFileImporterPresented = false
+    @State private var selectedFileForMove: FileItem?
 
     private var currentTitle: String {
         folderStack.last?.name ?? "Files"
@@ -88,6 +360,20 @@ struct FilesTab: View {
                     ContentUnavailableView("No items here", systemImage: "folder", description: Text("This folder is empty."))
                 } else {
                     List {
+                        if let operation = viewModel.operationMessage {
+                            Section {
+                                Text(operation)
+                                    .foregroundStyle(.green)
+                            }
+                        }
+
+                        if let error = viewModel.errorMessage {
+                            Section {
+                                Text(error)
+                                    .foregroundStyle(.red)
+                            }
+                        }
+
                         if !viewModel.folders.isEmpty {
                             Section("Folders") {
                                 ForEach(viewModel.folders, id: \.id) { folder in
@@ -112,6 +398,14 @@ struct FilesTab: View {
                                     } label: {
                                         FileRow(file: file)
                                     }
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                        Button {
+                                            selectedFileForMove = file
+                                        } label: {
+                                            Label("Move", systemImage: "arrowshape.right")
+                                        }
+                                        .tint(.blue)
+                                    }
                                 }
                             }
                         }
@@ -132,14 +426,78 @@ struct FilesTab: View {
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        Task {
-                            await viewModel.fetchFiles(folderId: folderStack.last?.id)
+                    HStack(spacing: 16) {
+                        Button {
+                            isFileImporterPresented = true
+                        } label: {
+                            Image(systemName: "square.and.arrow.up")
                         }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
+
+                        Button {
+                            isCreateFolderPresented = true
+                        } label: {
+                            Image(systemName: "folder.badge.plus")
+                        }
+
+                        Button {
+                            Task {
+                                await viewModel.fetchFiles(folderId: folderStack.last?.id)
+                            }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
                     }
                 }
+            }
+        }
+        .alert("Create folder", isPresented: $isCreateFolderPresented) {
+            TextField("Folder name", text: $newFolderName)
+            Button("Cancel", role: .cancel) {
+                newFolderName = ""
+            }
+            Button("Create") {
+                Task {
+                    await viewModel.createFolder(name: newFolderName, parentId: folderStack.last?.id)
+                    newFolderName = ""
+                }
+            }
+        } message: {
+            Text("Add a new folder in the current location.")
+        }
+        .fileImporter(
+            isPresented: $isFileImporterPresented,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: false
+        ) { result in
+            guard case .success(let urls) = result, let first = urls.first else { return }
+            Task {
+                await viewModel.uploadFile(from: first, to: folderStack.last?.id)
+            }
+        }
+        .confirmationDialog("Move file", isPresented: Binding(
+            get: { selectedFileForMove != nil },
+            set: { showing in if !showing { selectedFileForMove = nil } }
+        ), titleVisibility: .visible) {
+            if let file = selectedFileForMove {
+                Button("Move to root") {
+                    Task {
+                        await viewModel.moveFile(fileId: file.id, to: nil)
+                        selectedFileForMove = nil
+                    }
+                }
+
+                ForEach(viewModel.folders, id: \.id) { folder in
+                    Button("Move to \(folder.name)") {
+                        Task {
+                            await viewModel.moveFile(fileId: file.id, to: folder.id)
+                            selectedFileForMove = nil
+                        }
+                    }
+                }
+            }
+
+            Button("Cancel", role: .cancel) {
+                selectedFileForMove = nil
             }
         }
         .task {
@@ -210,16 +568,33 @@ struct ShopifyTab: View {
 
 struct EmailTab: View {
     @State private var viewModel = EmailViewModel()
+    @State private var query = ""
+    @State private var unreadOnly = false
+    @State private var isComposePresented = false
+
+    private var filteredMessages: [MailMessage] {
+        viewModel.messages.filter { message in
+            let unreadMatches = unreadOnly ? !((message.is_read) ?? true) : true
+            if !unreadMatches { return false }
+
+            let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if trimmed.isEmpty { return true }
+
+            return message.subject.lowercased().contains(trimmed)
+                || message.from.lowercased().contains(trimmed)
+                || message.snippet.lowercased().contains(trimmed)
+        }
+    }
     
     var body: some View {
         NavigationStack {
             Group {
                 if viewModel.isLoading {
                     ProgressView("Loading mail...")
-                } else if viewModel.messages.isEmpty {
+                } else if filteredMessages.isEmpty {
                     ContentUnavailableView("No messages", systemImage: "envelope")
                 } else {
-                    List(viewModel.messages, id: \.id) { message in
+                    List(filteredMessages, id: \.id) { message in
                         NavigationLink(destination: EmailDetailView(viewModel: viewModel, messageId: message.id)) {
                             MailMessageRow(message: message)
                         }
@@ -227,16 +602,35 @@ struct EmailTab: View {
                 }
             }
             .navigationTitle("Email")
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search mail")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Toggle(isOn: $unreadOnly) {
+                        Text("Unread")
+                    }
+                    .toggleStyle(.switch)
+                }
+
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        Task {
-                            await viewModel.fetchInbox()
+                    HStack(spacing: 16) {
+                        Button {
+                            isComposePresented = true
+                        } label: {
+                            Image(systemName: "square.and.pencil")
                         }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
+
+                        Button {
+                            Task {
+                                await viewModel.fetchInbox()
+                            }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
                     }
                 }
+            }
+            .sheet(isPresented: $isComposePresented) {
+                MailComposeSheet(viewModel: viewModel)
             }
         }
         .task {
@@ -339,6 +733,21 @@ struct EmailDetailView: View {
 struct AdminTab: View {
     @State private var viewModel = AdminViewModel()
     @State private var selectedSegment: Int = 0
+    @State private var searchQuery = ""
+    @State private var showCreateUserSheet = false
+
+    @State private var newUserEmail = ""
+    @State private var newUserName = ""
+    @State private var newUserPassword = ""
+    @State private var newUserRole = "user"
+
+    private var filteredUsers: [AdminUserResponse] {
+        let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return viewModel.users }
+        return viewModel.users.filter {
+            $0.email.lowercased().contains(q) || $0.full_name.lowercased().contains(q)
+        }
+    }
     
     var body: some View {
         NavigationStack {
@@ -346,6 +755,7 @@ struct AdminTab: View {
                 Picker("Admin", selection: $selectedSegment) {
                     Text("Users").tag(0)
                     Text("Storage").tag(1)
+                    Text("Audit").tag(2)
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
@@ -357,18 +767,126 @@ struct AdminTab: View {
                 } else {
                     List {
                         if selectedSegment == 0 {
-                            ForEach(viewModel.users, id: \.id) { user in
+                            ForEach(filteredUsers, id: \.id) { user in
                                 UserRow(user: user)
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                        Button(role: .destructive) {
+                                            Task {
+                                                await viewModel.deleteUser(user)
+                                            }
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                    }
                             }
-                        } else {
+                        } else if selectedSegment == 1 {
                             ForEach(viewModel.storageUsage, id: \.email) { usage in
                                 StorageRow(usage: usage)
+                            }
+                        } else {
+                            ForEach(viewModel.auditLogs, id: \.id) { log in
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(log.event_type)
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(log.created_at)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    if let entity = log.entity_type {
+                                        Text(entity)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        }
+
+                        if let status = viewModel.statusMessage {
+                            Section {
+                                Text(status)
+                                    .foregroundStyle(.green)
+                            }
+                        }
+
+                        if let error = viewModel.errorMessage {
+                            Section {
+                                Text(error)
+                                    .foregroundStyle(.red)
                             }
                         }
                     }
                 }
             }
             .navigationTitle("Admin")
+            .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search users")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    HStack(spacing: 16) {
+                        if selectedSegment == 0 {
+                            Button {
+                                showCreateUserSheet = true
+                            } label: {
+                                Image(systemName: "person.badge.plus")
+                            }
+                        }
+
+                        Button {
+                            Task {
+                                await viewModel.fetchAdminData()
+                            }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showCreateUserSheet) {
+            NavigationStack {
+                Form {
+                    Section("Nieuwe gebruiker") {
+                        TextField("Naam", text: $newUserName)
+                        TextField("E-mail", text: $newUserEmail)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.emailAddress)
+                        SecureField("Tijdelijk wachtwoord", text: $newUserPassword)
+
+                        Picker("Rol", selection: $newUserRole) {
+                            Text("User").tag("user")
+                            Text("Admin").tag("admin")
+                        }
+                    }
+                }
+                .navigationTitle("User aanmaken")
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Annuleren") {
+                            showCreateUserSheet = false
+                        }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Opslaan") {
+                            Task {
+                                await viewModel.createUser(
+                                    email: newUserEmail,
+                                    fullName: newUserName,
+                                    password: newUserPassword,
+                                    role: newUserRole
+                                )
+                                if viewModel.errorMessage == nil {
+                                    newUserEmail = ""
+                                    newUserName = ""
+                                    newUserPassword = ""
+                                    newUserRole = "user"
+                                    showCreateUserSheet = false
+                                }
+                            }
+                        }
+                        .disabled(newUserEmail.isEmpty || newUserName.isEmpty || newUserPassword.isEmpty)
+                    }
+                }
+            }
         }
         .task {
             await viewModel.fetchAdminData()
@@ -970,16 +1488,66 @@ struct QuickLookPreview: UIViewControllerRepresentable {
 struct MailPreviewView: UIViewRepresentable {
     let html: String
 
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
     func makeUIView(context: Context) -> WKWebView {
-        let webView = WKWebView(frame: .zero)
+        let configuration = WKWebViewConfiguration()
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+
+        let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.isOpaque = false
         webView.backgroundColor = .clear
-        webView.scrollView.isScrollEnabled = false
+        webView.scrollView.isScrollEnabled = true
+        webView.scrollView.bounces = true
+        webView.scrollView.alwaysBounceVertical = true
+        webView.scrollView.keyboardDismissMode = .onDrag
+        webView.navigationDelegate = context.coordinator
+        webView.uiDelegate = context.coordinator
         return webView
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
         webView.loadHTMLString(html, baseURL: nil)
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+        private func openExternally(_ url: URL) {
+            let allowedSchemes = ["http", "https", "mailto", "tel"]
+            guard let scheme = url.scheme?.lowercased(), allowedSchemes.contains(scheme) else { return }
+
+            DispatchQueue.main.async {
+                UIApplication.shared.open(url)
+            }
+        }
+
+        func webView(
+            _ webView: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction,
+            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+        ) {
+            guard navigationAction.navigationType == .linkActivated,
+                  let url = navigationAction.request.url else {
+                decisionHandler(.allow)
+                return
+            }
+
+            openExternally(url)
+            decisionHandler(.cancel)
+        }
+
+        func webView(
+            _ webView: WKWebView,
+            createWebViewWith configuration: WKWebViewConfiguration,
+            for navigationAction: WKNavigationAction,
+            windowFeatures: WKWindowFeatures
+        ) -> WKWebView? {
+            if let url = navigationAction.request.url {
+                openExternally(url)
+            }
+            return nil
+        }
     }
 }
 
@@ -1031,6 +1599,154 @@ struct MailReplyComposerView: View {
                 }
             }
         }
+    }
+}
+
+struct MailComposeSheet: View {
+    let viewModel: EmailViewModel
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var recipient = ""
+    @State private var subject = ""
+    @State private var bodyText = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Message") {
+                    TextField("To", text: $recipient)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.emailAddress)
+                    TextField("Subject", text: $subject)
+                    TextEditor(text: $bodyText)
+                        .frame(minHeight: 180)
+                }
+
+                if let status = viewModel.statusMessage {
+                    Section {
+                        Text(status)
+                            .foregroundStyle(.green)
+                    }
+                }
+
+                if let error = viewModel.errorMessage {
+                    Section {
+                        Text(error)
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("New mail")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Task {
+                            let sent = await viewModel.sendMail(to: recipient, subject: subject, body: bodyText)
+                            if sent {
+                                dismiss()
+                            }
+                        }
+                    } label: {
+                        if viewModel.isLoading {
+                            ProgressView()
+                        } else {
+                            Text("Send")
+                        }
+                    }
+                    .disabled(recipient.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isLoading)
+                }
+            }
+        }
+    }
+}
+
+struct CloudHeroCard: View {
+    let title: String
+    let subtitle: String
+    let badges: [(String, String)]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(.white)
+            Text(subtitle)
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.85))
+
+            HStack(spacing: 8) {
+                ForEach(Array(badges.enumerated()), id: \.offset) { _, badge in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(badge.0)
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.7))
+                        Text(badge.1)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [Color.blue.opacity(0.9), Color.purple.opacity(0.82)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
+    }
+}
+
+struct CloudActionCard: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.headline)
+                .foregroundStyle(.blue)
+                .frame(width: 34, height: 34)
+                .background(Color.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+extension View {
+    func cloudCardStyle() -> some View {
+        self
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 

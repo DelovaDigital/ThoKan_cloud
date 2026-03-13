@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = True
     smtp_use_ssl: bool = False
 
+    apns_team_id: str | None = None
+    apns_key_id: str | None = None
+    apns_bundle_id: str | None = None
+    apns_private_key: str | None = None
+    apns_use_sandbox: bool = True
+
     rate_limit_per_minute: int = 120
     cors_origins: str = "http://localhost:3000,capacitor://localhost,ionic://localhost"
     

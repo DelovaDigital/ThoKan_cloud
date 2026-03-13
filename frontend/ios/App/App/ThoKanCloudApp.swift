@@ -2,6 +2,11 @@ import SwiftUI
 import UIKit
 import UserNotifications
 
+extension Notification.Name {
+    static let thokanOpenTab = Notification.Name("thokan.open.tab")
+    static let thokanDeviceTokenUpdated = Notification.Name("thokan.device.token.updated")
+}
+
 enum AppAppearance: String, CaseIterable, Identifiable {
     case system
     case light
@@ -34,6 +39,7 @@ enum AppAppearance: String, CaseIterable, Identifiable {
 
 @main
 struct ThoKanCloudApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var authViewModel = AuthenticationViewModel()
     @AppStorage("preferredAppearance") private var preferredAppearance = AppAppearance.system.rawValue
 
@@ -158,51 +164,69 @@ struct LoginView: View {
 struct MainTabView: View {
     @Environment(AuthenticationViewModel.self) private var authViewModel
     @State private var notificationMonitor = AppNotificationMonitor()
+    @State private var selectedTab = 0
 
     private var isAdmin: Bool {
         authViewModel.currentUser?.roles.contains("admin") == true
     }
     
     var body: some View {
-        TabView {
-            DashboardTab()
+        TabView(selection: $selectedTab) {
+            DashboardTab(selectedTab: $selectedTab)
                 .tabItem {
                     Label("Home", systemImage: "house")
                 }
+                .tag(0)
 
             FilesTab()
                 .tabItem {
                     Label("Files", systemImage: "folder")
                 }
+                .tag(1)
 
             ShopifyTab()
                 .tabItem {
                     Label("Shopify", systemImage: "message")
                 }
+                .tag(2)
 
             EmailTab()
                 .tabItem {
                     Label("Mail", systemImage: "envelope")
                 }
+                .tag(3)
 
             if isAdmin {
                 AdminTab()
                     .tabItem {
                         Label("Admin", systemImage: "slider.horizontal.3")
                     }
+                    .tag(4)
             }
 
             SettingsTab()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape")
                 }
+                .tag(isAdmin ? 5 : 4)
         }
         .tint(.blue)
         .task {
             notificationMonitor.start()
+            _ = await BackgroundSyncCoordinator.shared.processQueuedActions()
         }
         .onDisappear {
             notificationMonitor.stop()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .thokanOpenTab)) { notification in
+            guard let tab = notification.object as? Int else { return }
+            selectedTab = tab
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .thokanDeviceTokenUpdated)) { notification in
+            guard let token = notification.object as? String, !token.isEmpty else { return }
+            Task {
+                try? await APIClient.shared.registerDeviceToken(token)
+            }
         }
     }
 }
@@ -250,7 +274,12 @@ final class AppNotificationMonitor: NSObject, UNUserNotificationCenterDelegate {
             return
         }
 
-        _ = try? await notificationCenter.requestAuthorization(options: [.alert, .badge, .sound])
+        let granted = (try? await notificationCenter.requestAuthorization(options: [.alert, .badge, .sound])) == true
+        guard granted else { return }
+
+        await MainActor.run {
+            UIApplication.shared.registerForRemoteNotifications()
+        }
     }
 
     private func pollIfNeeded() async {
@@ -283,7 +312,8 @@ final class AppNotificationMonitor: NSObject, UNUserNotificationCenterDelegate {
                 await deliverNotification(
                     identifier: "mail-\(message.id)",
                     title: "New mail from \(message.from)",
-                    body: message.subject.isEmpty ? (message.snippet.isEmpty ? "Open ThoKan Cloud to read it." : message.snippet) : message.subject
+                    body: message.subject.isEmpty ? (message.snippet.isEmpty ? "Open ThoKan Cloud to read it." : message.snippet) : message.subject,
+                    targetTab: 3
                 )
             }
 
@@ -312,7 +342,8 @@ final class AppNotificationMonitor: NSObject, UNUserNotificationCenterDelegate {
                 await deliverNotification(
                     identifier: "shopify-\(event.id)",
                     title: "New Shopify event: \(orderName)",
-                    body: "\(event.author): \(event.message)"
+                    body: "\(event.author): \(event.message)",
+                    targetTab: 2
                 )
             }
 
@@ -322,11 +353,12 @@ final class AppNotificationMonitor: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    private func deliverNotification(identifier: String, title: String, body: String) async {
+    private func deliverNotification(identifier: String, title: String, body: String, targetTab: Int) async {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
+        content.userInfo = ["target_tab": targetTab]
 
         let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
         try? await notificationCenter.add(request)
@@ -338,5 +370,16 @@ final class AppNotificationMonitor: NSObject, UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .list, .sound])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        defer { completionHandler() }
+        let info = response.notification.request.content.userInfo
+        guard let tab = info["target_tab"] as? Int else { return }
+        NotificationCenter.default.post(name: .thokanOpenTab, object: tab)
     }
 }

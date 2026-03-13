@@ -61,6 +61,17 @@ type SortOrder = "newest" | "oldest" | "subject" | "sender";
 const MAIL_NOTIFICATION_STORAGE_KEY = "mail-last-message-id";
 const MAIL_POLL_INTERVAL_MS = 60_000;
 
+function ensureLinksOpenExternally(rawHtml: string): string {
+  const baseTag = '<base target="_blank" rel="noopener noreferrer">';
+  if (/<head[^>]*>/i.test(rawHtml)) {
+    return rawHtml.replace(/<head([^>]*)>/i, `<head$1>${baseTag}`);
+  }
+  if (/<html[^>]*>/i.test(rawHtml)) {
+    return rawHtml.replace(/<html([^>]*)>/i, `<html$1><head>${baseTag}</head>`);
+  }
+  return `<!doctype html><html><head>${baseTag}</head><body>${rawHtml}</body></html>`;
+}
+
 export default function MailPage() {
   // Config
   const [config, setConfig] = useState<MailConfig | null>(null);
@@ -323,8 +334,9 @@ export default function MailPage() {
       if (htmlContent && htmlContent.includes("&lt;")) htmlContent = decodeHtmlEntities(htmlContent);
 
       if (htmlContent) {
+        const htmlWithTarget = ensureLinksOpenExternally(htmlContent);
         if (emailHtmlUrl) URL.revokeObjectURL(emailHtmlUrl);
-        const blob = new Blob([htmlContent], { type: "text/html; charset=utf-8" });
+        const blob = new Blob([htmlWithTarget], { type: "text/html; charset=utf-8" });
         setEmailHtmlUrl(URL.createObjectURL(blob));
       } else {
         setEmailHtmlUrl(null);
@@ -423,7 +435,7 @@ export default function MailPage() {
 
   return (
     <LayoutShell>
-      <div className="flex h-full flex-col gap-4">
+      <div className="flex h-full min-h-0 flex-col gap-4">
         {/* ── Sticky header ─────────────────────────────────────────── */}
         <div className="glass sticky top-3 z-20 flex items-center justify-between rounded-2xl p-4 backdrop-blur">
           <h2 className="text-xl font-semibold">Mailbox</h2>
@@ -475,7 +487,7 @@ export default function MailPage() {
         )}
 
         {/* ── Layout: sidebar + main ────────────────────────────────── */}
-        <div className="flex flex-1 gap-4">
+        <div className="flex min-h-0 flex-1 gap-4">
           {/* Sidebar */}
           <aside className="glass flex w-44 shrink-0 flex-col gap-1 rounded-2xl p-3">
             <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide opacity-50">Mappen</p>
@@ -504,7 +516,7 @@ export default function MailPage() {
           </aside>
 
           {/* Main panel */}
-          <main className="glass flex flex-1 flex-col gap-4 rounded-2xl p-5">
+          <main className="glass flex min-h-0 flex-1 flex-col gap-4 rounded-2xl p-5">
             {/* Stats row */}
             <div className="grid grid-cols-3 gap-3 text-sm">
               <div className="rounded-xl border border-border bg-card/30 p-3">
@@ -573,7 +585,7 @@ export default function MailPage() {
             </div>
 
             {/* Message list */}
-            <ul className="max-h-[600px] space-y-2 overflow-y-auto">
+            <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1" style={{ WebkitOverflowScrolling: "touch" }}>
               {visibleList.map((msg) => {
                 const folderParam = activeFolder === "inbox" ? "INBOX" : sentFolderName;
                 return (
@@ -734,6 +746,7 @@ export default function MailPage() {
           >
             <div
               className="glass max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl p-6 shadow-xl"
+              style={{ WebkitOverflowScrolling: "touch" }}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="mb-4 flex items-start justify-between gap-4">
@@ -762,12 +775,13 @@ export default function MailPage() {
                 {emailHtmlUrl ? (
                   <iframe
                     src={emailHtmlUrl}
-                    className="h-[600px] w-full border-0"
-                    sandbox="allow-same-origin allow-popups"
+                    className="h-[70vh] min-h-[360px] w-full border-0"
+                    sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
+                    scrolling="yes"
                     title="E-mailinhoud"
                   />
                 ) : selectedMessage.text_body ? (
-                  <pre className="max-h-[600px] overflow-auto whitespace-pre-wrap p-4 font-sans text-sm">{selectedMessage.text_body}</pre>
+                  <pre className="max-h-[70vh] overflow-auto whitespace-pre-wrap p-4 font-sans text-sm" style={{ WebkitOverflowScrolling: "touch" }}>{selectedMessage.text_body}</pre>
                 ) : (
                   <p className="p-4 text-sm opacity-60">Geen inhoud</p>
                 )}
