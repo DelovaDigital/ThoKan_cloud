@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
+import { LoginPage } from "@/components/login-page";
 
 export default function HomePage() {
-  redirect("/login");
+  return <LoginPage />;
 }
 

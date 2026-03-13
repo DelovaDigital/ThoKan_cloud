@@ -31,7 +31,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       const authenticated = await ensureSession();
       if (cancelled) return;
       if (!authenticated) {
-        window.location.replace("/login");
+        window.location.replace("/");
         return;
       }
       setAuthChecked(true);
@@ -50,7 +50,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     } catch {
       // Ignore storage errors.
     }
-    window.location.replace("/login");
+    window.location.replace("/");
   }
 
   if (!authChecked) {

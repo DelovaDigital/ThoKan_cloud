@@ -199,7 +199,7 @@ export default function RegisterPage() {
 
             <p className="mt-6 text-center text-sm opacity-60">
               Heb je al een account?{" "}
-              <Link href="/login" className="text-accent hover:underline">
+              <Link href="/" className="text-accent hover:underline">
                 Inloggen
               </Link>
             </p>

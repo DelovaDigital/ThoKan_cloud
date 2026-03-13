@@ -303,7 +303,7 @@ export default function SettingsPage() {
   }
 
   function forceReloginAfterRebuild() {
-    // Navigate to the dedicated restarting page, which polls and redirects to /login when ready.
+    // Navigate to the dedicated restarting page, which polls and redirects to / when ready.
     window.location.replace("/restarting");
   }
 
