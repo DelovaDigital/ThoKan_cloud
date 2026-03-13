@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
   Boxes,
@@ -49,6 +49,7 @@ type UpdatePackage = {
   channel: string;
   size_bytes: number;
   modified_at: string;
+  release_notes?: string | null;
 };
 
 type UpdateStatus = {
@@ -60,6 +61,15 @@ type UpdateStatus = {
   return_code?: number | null;
   stdout?: string | null;
   stderr?: string | null;
+  progress?: number | null;
+  progress_step?: string | null;
+  release_notes?: string | null;
+};
+
+type AptStatus = {
+  upgradable: number;
+  packages: string[];
+  checked_at: string;
 };
 
 type UpdateConfig = {
@@ -176,6 +186,9 @@ export default function SettingsPage() {
   const [fetchBusy, setFetchBusy] = useState(false);
   const [dryRun, setDryRun] = useState(false);
   const [updateFile, setUpdateFile] = useState<File | null>(null);
+  const [aptStatus, setAptStatus] = useState<AptStatus | null>(null);
+  const [aptBusy, setAptBusy] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [shopifyDomain, setShopifyDomain] = useState("");
   const [shopifyApiVersion, setShopifyApiVersion] = useState("2024-10");
   const [shopifyAccessToken, setShopifyAccessToken] = useState("");
@@ -213,7 +226,31 @@ export default function SettingsPage() {
     loadShopifyWebsiteChatBridgeConfig();
     loadGelatoConfig();
     loadCurrentUser();
+    loadAptStatus();
   }, []);
+
+  async function loadAptStatus() {
+    try {
+      const data = await api<AptStatus>("/system/update/apt-status");
+      setAptStatus(data);
+    } catch {
+      // apt not available on this system
+    }
+  }
+
+  async function applyAptUpgrade() {
+    setAptBusy(true);
+    setStatus("");
+    try {
+      const result = await api<UpdateStatus>("/system/update/apt-upgrade", { method: "POST" });
+      setUpdateStatus(result);
+      setStatus(result.state === "success" ? "Systeempakketten bijgewerkt" : "Systeempakketten bijwerken mislukt");
+      await loadAptStatus();
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Systeempakketten bijwerken mislukt");
+    }
+    setAptBusy(false);
+  }
 
   async function loadCurrentUser() {
     try {
@@ -223,6 +260,27 @@ export default function SettingsPage() {
       setCanConfigureGlobal(false);
     }
   }
+
+  useEffect(() => {
+    if (updateBusy || aptBusy) {
+      pollRef.current = setInterval(async () => {
+        try {
+          const latest = await api<UpdateStatus>("/system/update/status");
+          setUpdateStatus(latest);
+          if (latest.state !== "running") {
+            if (pollRef.current) clearInterval(pollRef.current);
+          }
+        } catch {
+          // ignore polling errors
+        }
+      }, 2000);
+    } else {
+      if (pollRef.current) clearInterval(pollRef.current);
+    }
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [updateBusy, aptBusy]);
 
   async function loadInfo() {
     setLoading(true);
@@ -601,6 +659,7 @@ export default function SettingsPage() {
                     loadShopifyConfig();
                     loadShopifyWebsiteChatBridgeConfig();
                     loadGelatoConfig();
+                    loadAptStatus();
                   }}
                   disabled={loading}
                   className="inline-flex items-center gap-2 rounded-2xl bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
@@ -1233,25 +1292,98 @@ Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
             </button>
           </div>
 
-          {updateStatus && (
+          {aptStatus !== null && (
+            <div className={`mt-4 rounded-[1.5rem] border p-4 text-sm ${aptStatus.upgradable > 0 ? "border-yellow-500/40 bg-yellow-500/10" : "border-border bg-card/30"}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1">
+                  <p className="font-medium">
+                    {aptStatus.upgradable > 0
+                      ? `${aptStatus.upgradable} Debian/Ubuntu-pakket${aptStatus.upgradable === 1 ? "" : "ten"} kunnen worden bijgewerkt`
+                      : "Systeem apt-pakketten zijn up-to-date"}
+                  </p>
+                  {aptStatus.upgradable > 0 && (
+                    <p className="mt-1 text-xs opacity-70 line-clamp-2">
+                      {aptStatus.packages.slice(0, 6).map((p) => p.split("/")[0]).join(", ")}
+                      {aptStatus.packages.length > 6 ? ` en ${aptStatus.packages.length - 6} meer` : ""}
+                    </p>
+                  )}
+                  <p className="mt-1 text-xs opacity-50">Gecheckt: {new Date(aptStatus.checked_at).toLocaleString()}</p>
+                </div>
+                <div className="flex shrink-0 flex-col gap-2 items-end">
+                  {aptStatus.upgradable > 0 && (
+                    <button
+                      onClick={applyAptUpgrade}
+                      disabled={aptBusy || updateBusy}
+                      className="rounded-xl bg-yellow-500 px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                    >
+                      {aptBusy ? "Bijwerken..." : "Systeem bijwerken"}
+                    </button>
+                  )}
+                  <button
+                    onClick={async () => {
+                      setAptBusy(true);
+                      try {
+                        const data = await api<AptStatus>("/system/update/apt-refresh", { method: "POST" });
+                        setAptStatus(data);
+                      } catch { /* swallow */ }
+                      setAptBusy(false);
+                    }}
+                    disabled={aptBusy}
+                    className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs transition hover:bg-accent/10 disabled:opacity-50"
+                  >
+                    {aptBusy ? "Laden..." : "Vernieuwen"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {(updateBusy || aptBusy || updateStatus) && (
             <div className="mt-4 rounded-[1.5rem] border border-border bg-card/30 p-4 text-sm">
-              <p>
-                Status: <span className="font-medium">{updateStatus.state}</span>
-              </p>
-              {updateStatus.channel && <p className="mt-1">Kanaal: {updateStatus.channel}</p>}
-              {updateStatus.package_name && <p className="mt-1">Pakket: {updateStatus.package_name}</p>}
-              {typeof updateStatus.return_code === "number" && <p className="mt-1">Returncode: {updateStatus.return_code}</p>}
-              {updateStatus.started_at && <p className="mt-1 opacity-70">Gestart: {new Date(updateStatus.started_at).toLocaleString()}</p>}
-              {updateStatus.finished_at && <p className="mt-1 opacity-70">Afgerond: {new Date(updateStatus.finished_at).toLocaleString()}</p>}
-              {updateStatus.stderr && (
-                <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-black/20 p-3 text-xs text-red-300">
-                  {updateStatus.stderr}
-                </pre>
+              {(updateBusy || aptBusy || updateStatus?.state === "running") && (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium opacity-70">{updateStatus?.progress_step || "Bezig..."}</p>
+                    <p className="text-xs opacity-50">{updateStatus?.progress ?? 0}%</p>
+                  </div>
+                  <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-card/60">
+                    <div
+                      className="h-full rounded-full bg-accent transition-all duration-700"
+                      style={{ width: `${updateStatus?.progress ?? 5}%` }}
+                    />
+                  </div>
+                </div>
               )}
-              {updateStatus.stdout && (
-                <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-black/20 p-3 text-xs">
-                  {updateStatus.stdout}
-                </pre>
+              {updateStatus && (
+                <>
+                  <p>
+                    Status:{" "}
+                    <span className={`font-medium ${updateStatus.state === "success" ? "text-green-500" : updateStatus.state === "failed" ? "text-red-400" : ""}`}>
+                      {updateStatus.state}
+                    </span>
+                  </p>
+                  {updateStatus.channel && <p className="mt-1">Kanaal: {updateStatus.channel}</p>}
+                  {updateStatus.package_name && <p className="mt-1">Pakket: {updateStatus.package_name}</p>}
+                  {typeof updateStatus.return_code === "number" && <p className="mt-1">Returncode: {updateStatus.return_code}</p>}
+                  {updateStatus.started_at && <p className="mt-1 opacity-70">Gestart: {new Date(updateStatus.started_at).toLocaleString()}</p>}
+                  {updateStatus.finished_at && <p className="mt-1 opacity-70">Afgerond: {new Date(updateStatus.finished_at).toLocaleString()}</p>}
+                  {updateStatus.release_notes && (
+                    <div className="mt-3 rounded-xl border border-border bg-card/40 p-3">
+                      <p className="mb-1 text-xs font-semibold uppercase tracking-wider opacity-50">Releasenotes</p>
+                      <pre className="whitespace-pre-wrap text-xs leading-relaxed">{updateStatus.release_notes}</pre>
+                    </div>
+                  )}
+                  {updateStatus.stderr && (
+                    <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-black/20 p-3 text-xs text-red-300">
+                      {updateStatus.stderr}
+                    </pre>
+                  )}
+                  {updateStatus.stdout && (
+                    <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-black/20 p-3 text-xs">
+                      {updateStatus.stdout}
+                    </pre>
+                  )}
+                </>
               )}
             </div>
           )}

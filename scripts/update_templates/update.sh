@@ -30,7 +30,7 @@ fi
 
 echo "[ThoKan update] Syncing payload to ${TARGET_ROOT}..."
 if command -v rsync &>/dev/null; then
-  rsync -a --delete "${PAYLOAD_DIR}/" "${TARGET_ROOT}/"
+  rsync -a --delete --ignore-errors "${PAYLOAD_DIR}/" "${TARGET_ROOT}/"
 else
   echo "[ThoKan update] rsync not found, falling back to cp"
   cp -a "${PAYLOAD_DIR}/." "${TARGET_ROOT}/"

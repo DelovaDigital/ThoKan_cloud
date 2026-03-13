@@ -29,6 +29,7 @@ DEFAULT_GITHUB_UPDATE_REPO = "AlessioD200/ThoKan_cloud"
 DEFAULT_GITHUB_UPDATE_BRANCH = "update-channel"
 TARGET_INSTALL_ROOT = Path("/opt/thokan-cloud")
 PRODUCTION_DOCKER_UPDATE_COMMAND = "sudo docker compose -f docker-compose.prod.yml up -d --build"
+NOTES_CACHE_KEY = "update_notes_cache"
 
 
 class StorageInfo(BaseModel):
@@ -62,6 +63,7 @@ class UpdatePackageInfo(BaseModel):
     channel: str
     size_bytes: int
     modified_at: str
+    release_notes: str | None = None
 
 
 class UpdateStatus(BaseModel):
@@ -73,6 +75,15 @@ class UpdateStatus(BaseModel):
     return_code: int | None = None
     stdout: str | None = None
     stderr: str | None = None
+    progress: int | None = None
+    progress_step: str | None = None
+    release_notes: str | None = None
+
+
+class AptStatus(BaseModel):
+    upgradable: int
+    packages: list[str]
+    checked_at: str
 
 
 class ApplyUpdateRequest(BaseModel):
@@ -105,8 +116,34 @@ class GitHubFetchApplyRequest(BaseModel):
     dry_run: bool = False
 
 
+def _get_notes_for_package(db: Session, package_name: str) -> str | None:
+    row = db.query(SystemSetting).filter(SystemSetting.key == NOTES_CACHE_KEY).first()
+    if not row or not isinstance(row.value, dict):
+        return None
+    return str(row.value.get(package_name) or "") or None
+
+
+def _store_notes_for_package(db: Session, package_name: str, notes: str | None) -> None:
+    if not notes:
+        return
+    row = db.query(SystemSetting).filter(SystemSetting.key == NOTES_CACHE_KEY).first()
+    cache: dict = dict(row.value) if row and isinstance(row.value, dict) else {}
+    if len(cache) >= 20:
+        for old_key in list(cache.keys())[:-19]:
+            del cache[old_key]
+    cache[package_name] = notes
+    if row:
+        row.value = cache
+    else:
+        row = SystemSetting(key=NOTES_CACHE_KEY, value=cache)
+        db.add(row)
+    db.commit()
+
+
 def _repo_install_root() -> Path:
-    return Path(__file__).resolve().parents[4]
+    # file lives at <install_root>/app/api/routes/system.py
+    # parents[0]=routes  [1]=api  [2]=app  [3]=<install_root>
+    return Path(__file__).resolve().parents[3]
 
 
 def _resolve_install_root() -> Path:
@@ -187,14 +224,14 @@ def _download_bytes(url: str) -> bytes:
         return response.read()
 
 
-def _resolve_source_url(source_url: str) -> tuple[str, str | None]:
+def _resolve_source_url(source_url: str) -> tuple[str, str | None, str | None]:
     parsed = urlparse(source_url)
     if parsed.scheme not in {"http", "https"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Update source must be an http(s) URL")
 
     lower_path = parsed.path.lower()
     if lower_path.endswith(".zip") or lower_path.endswith(".tar") or lower_path.endswith(".tar.gz") or lower_path.endswith(".tgz"):
-        return source_url, None
+        return source_url, None, None
 
     if lower_path.endswith(".json"):
         raw = _download_bytes(source_url)
@@ -207,7 +244,8 @@ def _resolve_source_url(source_url: str) -> tuple[str, str | None]:
         if not package_url:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Manifest is missing package_url")
         version = str(manifest.get("version") or "").strip() or None
-        return package_url, version
+        notes = str(manifest.get("notes") or "").strip() or None
+        return package_url, version, notes
 
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
@@ -324,7 +362,7 @@ fi
 
 echo "[ThoKan update] Syncing payload to ${TARGET_ROOT}..."
 if command -v rsync &>/dev/null; then
-  rsync -a --delete "${PAYLOAD_DIR}/" "${TARGET_ROOT}/"
+  rsync -a --delete --ignore-errors "${PAYLOAD_DIR}/" "${TARGET_ROOT}/"
 else
   echo "[ThoKan update] rsync not found, falling back to cp"
   cp -a "${PAYLOAD_DIR}/." "${TARGET_ROOT}/"
@@ -617,7 +655,7 @@ def fetch_latest_update_package(
     if not source_url:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"No source URL configured for {channel} channel")
 
-    package_url, version = _resolve_source_url(source_url)
+    package_url, version, notes = _resolve_source_url(source_url)
     parsed = urlparse(package_url)
     original_name = _safe_name(Path(parsed.path).name)
     if not original_name or not _is_allowed_package(original_name):
@@ -638,11 +676,13 @@ def fetch_latest_update_package(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to download update package: {exc}") from exc
 
     stat = target_path.stat()
+    _store_notes_for_package(db, target_name, notes)
     return UpdatePackageInfo(
         name=target_name,
         channel=channel,
         size_bytes=stat.st_size,
         modified_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+        release_notes=notes,
     )
 
 
@@ -681,19 +721,21 @@ def apply_update_package(
     extraction_base.mkdir(parents=True, exist_ok=True)
 
     started_at = datetime.now(timezone.utc).isoformat()
-    _save_update_status(
-        db,
-        {
-            "state": "running",
-            "package_name": package_name,
-            "channel": channel,
-            "started_at": started_at,
-            "finished_at": None,
-            "return_code": None,
-            "stdout": "",
-            "stderr": "",
-        },
-    )
+    release_notes = _get_notes_for_package(db, package_name)
+    running_status: dict = {
+        "state": "running",
+        "package_name": package_name,
+        "channel": channel,
+        "started_at": started_at,
+        "finished_at": None,
+        "return_code": None,
+        "stdout": "",
+        "stderr": "",
+        "progress": 5,
+        "progress_step": "Pakket uitpakken...",
+        "release_notes": release_notes,
+    }
+    _save_update_status(db, running_status)
 
     try:
         with tempfile.TemporaryDirectory(dir=extraction_base) as tmp_dir:
@@ -707,6 +749,9 @@ def apply_update_package(
                     _safe_extract_tar(archive, extract_path)
             else:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported update package format")
+
+            running_status.update({"progress": 20, "progress_step": "Update script uitvoeren..."})
+            _save_update_status(db, running_status)
 
             script_name = _safe_name(payload.script_name)
             if not script_name:
@@ -754,6 +799,8 @@ def apply_update_package(
             post_stderr: list[str] = []
 
             if result.returncode == 0 and not payload.dry_run and auto_rebuild_docker:
+                running_status.update({"progress": 50, "progress_step": "Docker services herstartten..."})
+                _save_update_status(db, running_status)
                 docker_command = str(cfg.get("docker_update_command") or PRODUCTION_DOCKER_UPDATE_COMMAND)
                 docker_result = _run_shell_command_in_root(docker_command)
                 post_stdout.append(f"\n[Docker rebuild]\n{docker_result.stdout or ''}")
@@ -767,6 +814,8 @@ def apply_update_package(
                     )
 
             if result.returncode == 0 and not payload.dry_run and auto_update_ubuntu:
+                running_status.update({"progress": 80, "progress_step": "Systeempakketten bijwerken..."})
+                _save_update_status(db, running_status)
                 ubuntu_command = str(cfg.get("ubuntu_update_command") or "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade")
                 ubuntu_result = _run_shell_command(ubuntu_command)
                 post_stdout.append(f"\n[Ubuntu updates]\n{ubuntu_result.stdout or ''}")
@@ -789,6 +838,9 @@ def apply_update_package(
                 "return_code": result.returncode,
                 "stdout": (result.stdout or "")[-10000:],
                 "stderr": (result.stderr or "")[-10000:],
+                "progress": 100,
+                "progress_step": "Voltooid" if result.returncode == 0 else "Mislukt",
+                "release_notes": release_notes,
             }
             _save_update_status(db, status_payload)
             return UpdateStatus(**status_payload)
@@ -821,3 +873,111 @@ def apply_update_package(
         }
         _save_update_status(db, status_payload)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Update failed: {exc}") from exc
+
+
+def _list_apt_upgradable() -> list[str]:
+    try:
+        result = subprocess.run(
+            ["apt", "list", "--upgradable"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return [
+            line.strip()
+            for line in result.stdout.splitlines()
+            if line.strip() and not line.lower().startswith("listing")
+        ]
+    except FileNotFoundError:
+        return []
+
+
+@router.get("/update/apt-status", response_model=AptStatus)
+def get_apt_status(
+    current_user: User = Depends(get_current_user),
+    _: User = Depends(require_admin),
+):
+    """Return currently-known upgradable Debian/Ubuntu packages (uses cached apt index)."""
+    return AptStatus(
+        upgradable=len(lines := _list_apt_upgradable()),
+        packages=lines[:100],
+        checked_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@router.post("/update/apt-refresh", response_model=AptStatus)
+def refresh_apt_status(
+    current_user: User = Depends(get_current_user),
+    _: User = Depends(require_admin),
+):
+    """Run apt-get update to refresh package index, then return upgradable list."""
+    try:
+        subprocess.run(["apt-get", "update", "-qq"], capture_output=True, text=True, timeout=120)
+    except FileNotFoundError:
+        pass
+    lines = _list_apt_upgradable()
+    return AptStatus(
+        upgradable=len(lines),
+        packages=lines[:100],
+        checked_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@router.post("/update/apt-upgrade", response_model=UpdateStatus)
+def apt_upgrade(
+    current_user: User = Depends(get_current_user),
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Run apt-get update + apt-get upgrade on the host system."""
+    cfg = _load_update_config(db)
+    ubuntu_command = str(cfg.get("ubuntu_update_command") or "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade")
+    started_at = datetime.now(timezone.utc).isoformat()
+    _save_update_status(
+        db,
+        {
+            "state": "running",
+            "package_name": None,
+            "channel": "system",
+            "started_at": started_at,
+            "finished_at": None,
+            "return_code": None,
+            "stdout": "",
+            "stderr": "",
+            "progress": 10,
+            "progress_step": "Systeempakketten bijwerken...",
+        },
+    )
+    try:
+        result = _run_shell_command(ubuntu_command, timeout_seconds=1800)
+        finished_at = datetime.now(timezone.utc).isoformat()
+        status_payload = {
+            "state": "success" if result.returncode == 0 else "failed",
+            "package_name": None,
+            "channel": "system",
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "return_code": result.returncode,
+            "stdout": (result.stdout or "")[-10000:],
+            "stderr": (result.stderr or "")[-10000:],
+            "progress": 100,
+            "progress_step": "Systeempakketten bijgewerkt" if result.returncode == 0 else "Mislukt",
+        }
+        _save_update_status(db, status_payload)
+        return UpdateStatus(**status_payload)
+    except Exception as exc:
+        finished_at = datetime.now(timezone.utc).isoformat()
+        status_payload = {
+            "state": "failed",
+            "package_name": None,
+            "channel": "system",
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "return_code": -1,
+            "stdout": "",
+            "stderr": str(exc),
+            "progress": None,
+            "progress_step": "Mislukt",
+        }
+        _save_update_status(db, status_payload)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"apt-upgrade failed: {exc}") from exc
