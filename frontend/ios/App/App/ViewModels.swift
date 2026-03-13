@@ -495,7 +495,7 @@ class DirectChatViewModel {
             }
         } catch {
             errorMessage = error.localizedDescription
-        }
+        } 
 
         if showLoading {
             isLoading = false

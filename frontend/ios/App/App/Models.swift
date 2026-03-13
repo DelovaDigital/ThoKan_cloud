@@ -187,7 +187,7 @@ struct AdminUserResponse: Decodable, Identifiable {
     let is_active: Bool
 }
 
-struct DirectChatMessage: Codable, Identifiable {
+struct DirectChatMessage: Codable, Identifiable, Equatable {
     let id: String
     let sender_id: String
     let recipient_id: String
