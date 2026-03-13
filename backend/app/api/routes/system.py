@@ -105,6 +105,22 @@ class GitHubFetchApplyRequest(BaseModel):
     dry_run: bool = False
 
 
+def _repo_install_root() -> Path:
+    return Path(__file__).resolve().parents[4]
+
+
+def _resolve_install_root() -> Path:
+    override = os.environ.get("THOKAN_TARGET_ROOT") or os.environ.get("THOKAN_INSTALL_ROOT")
+    if override:
+        return Path(override).expanduser().resolve()
+
+    repo_root = _repo_install_root()
+    if repo_root.exists() and repo_root.is_dir():
+        return repo_root
+
+    return TARGET_INSTALL_ROOT
+
+
 def _normalize_channel(value: str | None) -> str:
     channel = (value or "stable").strip().lower()
     return channel if channel in {"stable", "beta"} else "stable"
@@ -209,17 +225,18 @@ def _run_shell_command(command: str, timeout_seconds: int = 3600) -> subprocess.
 
 
 def _run_shell_command_in_root(command: str, timeout_seconds: int = 3600) -> subprocess.CompletedProcess[str]:
-    if not TARGET_INSTALL_ROOT.exists():
+    target_root = _resolve_install_root()
+    if not target_root.exists():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Target install root not found: {TARGET_INSTALL_ROOT}",
+            detail=f"Target install root not found: {target_root}",
         )
     return subprocess.run(
         ["bash", "-lc", command],
         capture_output=True,
         text=True,
         timeout=timeout_seconds,
-        cwd=str(TARGET_INSTALL_ROOT),
+        cwd=str(target_root),
     )
 
 
@@ -286,7 +303,7 @@ def fetch_and_apply_github(
 set -euo pipefail
 CHANNEL="${THOKAN_UPDATE_CHANNEL:-stable}"
 DRY_RUN="${THOKAN_DRY_RUN:-0}"
-TARGET_ROOT="/opt/thokan-cloud"
+TARGET_ROOT="${THOKAN_TARGET_ROOT:-/opt/thokan-cloud}"
 PAYLOAD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/payload"
 
 echo "[ThoKan update] channel=${CHANNEL} dry_run=${DRY_RUN}"
@@ -327,6 +344,7 @@ echo "[ThoKan update] Package payload applied successfully."
                 env = os.environ.copy()
                 env["THOKAN_DRY_RUN"] = "1" if payload.dry_run else "0"
                 env["THOKAN_UPDATE_CHANNEL"] = channel
+                env["THOKAN_TARGET_ROOT"] = str(_resolve_install_root())
 
                 result = subprocess.run(["bash", str(script_path)], cwd=str(extract_path), capture_output=True, text=True, env=env, timeout=1800)
 
@@ -693,9 +711,24 @@ def apply_update_package(
                     detail=f"Update script '{script_name}' not found in package root",
                 )
 
+            if script_path.name == "update.sh":
+                try:
+                    script_content = script_path.read_text(encoding="utf-8")
+                    if "TARGET_ROOT=\"/opt/thokan-cloud\"" in script_content and "THOKAN_TARGET_ROOT" not in script_content:
+                        script_path.write_text(
+                            script_content.replace(
+                                'TARGET_ROOT="/opt/thokan-cloud"',
+                                'TARGET_ROOT="${THOKAN_TARGET_ROOT:-/opt/thokan-cloud}"',
+                            ),
+                            encoding="utf-8",
+                        )
+                except Exception:
+                    pass
+
             env = os.environ.copy()
             env["THOKAN_DRY_RUN"] = "1" if payload.dry_run else "0"
             env["THOKAN_UPDATE_CHANNEL"] = channel
+            env["THOKAN_TARGET_ROOT"] = str(_resolve_install_root())
 
             result = subprocess.run(
                 ["bash", str(script_path)],

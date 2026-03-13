@@ -3,7 +3,7 @@ set -euo pipefail
 
 CHANNEL="${THOKAN_UPDATE_CHANNEL:-stable}"
 DRY_RUN="${THOKAN_DRY_RUN:-0}"
-TARGET_ROOT="/opt/thokan-cloud"
+TARGET_ROOT="${THOKAN_TARGET_ROOT:-/opt/thokan-cloud}"
 PAYLOAD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/payload"
 
 echo "[ThoKan update] channel=${CHANNEL} dry_run=${DRY_RUN}"
