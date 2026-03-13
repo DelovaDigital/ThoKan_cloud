@@ -33,6 +33,35 @@ def _build_content_disposition(filename: str) -> str:
     return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
 
 
+def _candidate_storage_keys_for_file(db: Session, row: File) -> list[str]:
+    keys: list[str] = []
+
+    def _add(value: str | None) -> None:
+        if not value:
+            return
+        if value not in keys:
+            keys.append(value)
+
+    _add(row.storage_key)
+
+    if row.current_version_id:
+        current_version = db.get(FileVersion, row.current_version_id)
+        if current_version:
+            _add(current_version.storage_key)
+
+    recent_versions = (
+        db.query(FileVersion)
+        .filter(FileVersion.file_id == row.id)
+        .order_by(FileVersion.version_number.desc())
+        .limit(5)
+        .all()
+    )
+    for version in recent_versions:
+        _add(version.storage_key)
+
+    return keys
+
+
 def _is_admin(db: Session, user: User) -> bool:
     return "admin" in get_user_roles(db, user.id)
 
@@ -151,12 +180,23 @@ def download_file(
     if row.owner_id != current_user.id and not _is_admin(db, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
-    try:
-        encrypted = get_storage_driver().read(row.storage_key)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file content not found") from exc
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to read stored file content") from exc
+    encrypted: bytes | None = None
+    last_read_error: Exception | None = None
+    for storage_key in _candidate_storage_keys_for_file(db, row):
+        try:
+            encrypted = get_storage_driver().read(storage_key)
+            break
+        except FileNotFoundError as exc:
+            last_read_error = exc
+            continue
+        except Exception as exc:  # noqa: BLE001
+            last_read_error = exc
+            continue
+
+    if encrypted is None:
+        if isinstance(last_read_error, FileNotFoundError):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file content not found") from last_read_error
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to read stored file content") from last_read_error
 
     try:
         raw = decrypt_bytes(encrypted, row.encryption_iv) if row.encryption_iv else encrypted

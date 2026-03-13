@@ -615,7 +615,7 @@ export default function FilesPage() {
               <div
                 key={file.id}
                 className="relative flex items-center justify-between rounded-[1.5rem] border border-border bg-card/20 p-4 text-sm cursor-pointer transition hover:bg-accent/5"
-                onDoubleClick={() => void openPreview(file)}
+                onClick={() => void openPreview(file)}
               >
                 <div className="flex flex-1 items-center gap-3">
                   <div className="text-2xl">
@@ -651,14 +651,6 @@ export default function FilesPage() {
                       className="absolute right-0 z-20 mt-2 w-44 rounded-xl border border-border bg-card p-1 shadow-lg"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {isPreviewSupported(file) && (
-                        <button
-                          className="w-full rounded-lg px-3 py-2 text-left text-sm transition hover:bg-accent/10"
-                          onClick={() => void openPreview(file)}
-                        >
-                          Openen
-                        </button>
-                      )}
                       <button
                         className="w-full rounded-lg px-3 py-2 text-left text-sm transition hover:bg-accent/10"
                         onClick={() => {
