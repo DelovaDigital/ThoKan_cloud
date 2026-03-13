@@ -46,6 +46,7 @@ export default function RestartingPage() {
                 "auth_notice",
                 "Update toegepast en services herstart. Log opnieuw in om verder te gaan."
               );
+              sessionStorage.setItem("auth_notice_type", "success");
               window.location.replace("/login");
             }
             return;
@@ -58,6 +59,7 @@ export default function RestartingPage() {
       if (!cancelled) {
         localStorage.removeItem("access_token");
         sessionStorage.setItem("auth_notice", "Herstart duurde te lang. Probeer opnieuw in te loggen.");
+        sessionStorage.setItem("auth_notice_type", "warning");
         window.location.replace("/login");
       }
     }

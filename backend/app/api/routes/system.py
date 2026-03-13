@@ -105,6 +105,9 @@ class UpdateConfig(BaseModel):
     selected_channel: str = "stable"
     stable_source_url: str = f"https://raw.githubusercontent.com/{DEFAULT_GITHUB_UPDATE_REPO}/{DEFAULT_GITHUB_UPDATE_BRANCH}/stable/latest.json"
     beta_source_url: str = f"https://raw.githubusercontent.com/{DEFAULT_GITHUB_UPDATE_REPO}/{DEFAULT_GITHUB_UPDATE_BRANCH}/beta/latest.json"
+    auto_check_updates: bool = True
+    auto_install_nightly: bool = False
+    nightly_install_hour: int = 3
     auto_rebuild_docker: bool = True
     auto_update_ubuntu: bool = True
     docker_update_command: str = PRODUCTION_DOCKER_UPDATE_COMMAND
@@ -230,6 +233,10 @@ def _normalize_update_config(raw: dict | None) -> dict:
     if isinstance(raw, dict):
         cfg.update(raw)
     cfg["selected_channel"] = _normalize_channel(str(cfg.get("selected_channel") or "stable"))
+    try:
+        cfg["nightly_install_hour"] = max(0, min(23, int(cfg.get("nightly_install_hour", 3))))
+    except Exception:
+        cfg["nightly_install_hour"] = 3
     cfg["docker_update_command"] = PRODUCTION_DOCKER_UPDATE_COMMAND
     return cfg
 

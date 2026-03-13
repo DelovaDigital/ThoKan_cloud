@@ -5,22 +5,42 @@ import { useEffect } from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, LockKeyhole, ShieldCheck, Sparkles } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, ensureSession } from "@/lib/api";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [noticeType, setNoticeType] = useState<"warning" | "success">("warning");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function checkExistingSession() {
+      const authenticated = await ensureSession();
+      if (cancelled) return;
+      if (authenticated) {
+        router.replace("/dashboard");
+      }
+    }
+
+    void checkExistingSession();
+
     const notice = sessionStorage.getItem("auth_notice");
+    const type = sessionStorage.getItem("auth_notice_type");
     if (notice) {
       setError(notice);
+      setNoticeType(type === "success" ? "success" : "warning");
       sessionStorage.removeItem("auth_notice");
+      sessionStorage.removeItem("auth_notice_type");
     }
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -133,7 +153,7 @@ export default function LoginPage() {
               </div>
 
               {error && (
-                <div className="rounded-2xl border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-500">
+                <div className={`rounded-2xl p-3 text-sm ${noticeType === "success" ? "border border-green-500/50 bg-green-500/10 text-green-600 dark:text-green-300" : "border border-red-500/50 bg-red-500/10 text-red-500"}`}>
                   {error}
                 </div>
               )}

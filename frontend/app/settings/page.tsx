@@ -15,6 +15,7 @@ import {
   Sparkles,
   Store,
   WandSparkles,
+  X,
 } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { api, apiRaw } from "@/lib/api";
@@ -81,6 +82,9 @@ type UpdateConfig = {
   selected_channel: "stable" | "beta";
   stable_source_url: string;
   beta_source_url: string;
+  auto_check_updates: boolean;
+  auto_install_nightly: boolean;
+  nightly_install_hour: number;
   auto_rebuild_docker: boolean;
   auto_update_ubuntu: boolean;
   docker_update_command: string;
@@ -218,11 +222,13 @@ export default function SettingsPage() {
   const [updateBusy, setUpdateBusy] = useState(false);
   const [fetchBusy, setFetchBusy] = useState(false);
   const [checkResult, setCheckResult] = useState<{ version: string | null; up_to_date: boolean; notes: string | null } | null>(null);
+  const [updatePrompt, setUpdatePrompt] = useState<{ version: string | null; notes: string | null; installedVersion: string | null } | null>(null);
   const [dryRun, setDryRun] = useState(false);
   const [updateFile, setUpdateFile] = useState<File | null>(null);
   const [aptStatus, setAptStatus] = useState<AptStatus | null>(null);
   const [aptBusy, setAptBusy] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const nightlyInstallRef = useRef(false);
   const [shopifyDomain, setShopifyDomain] = useState("");
   const [shopifyApiVersion, setShopifyApiVersion] = useState("2024-10");
   const [shopifyAccessToken, setShopifyAccessToken] = useState("");
@@ -253,7 +259,13 @@ export default function SettingsPage() {
   const [mailBusy, setMailBusy] = useState(false);
   const [mailTestBusy, setMailTestBusy] = useState(false);
   const [canConfigureGlobal, setCanConfigureGlobal] = useState(false);
-  const [sectionFilter, setSectionFilter] = useState<"info" | "mail" | "api">("info");
+  const [sectionFilter, setSectionFilter] = useState<"info" | "storage" | "mail" | "api">("info");
+
+  function formatNightlyWindow(hour: number) {
+    const normalized = Math.max(0, Math.min(23, hour || 0));
+    const end = (normalized + 1) % 24;
+    return `${String(normalized).padStart(2, "0")}:00–${String(end).padStart(2, "0")}:00`;
+  }
 
   useEffect(() => {
     loadInfo();
@@ -463,7 +475,6 @@ export default function SettingsPage() {
   async function fetchLatestUpdate() {
     setFetchBusy(true);
     setStatus("");
-    setCheckResult(null);
     try {
       const result = await api<UpdatePackage>("/system/update/fetch-latest", {
         method: "POST",
@@ -475,75 +486,102 @@ export default function SettingsPage() {
       setStatus(`Laatste ${updateChannel}-update gedownload: ${result.name}`);
       await loadUpdateData();
 
-      const shouldApply = window.confirm(`Pakket ${result.name} is gedownload. Nu installeren?`);
-      if (shouldApply) {
-        setUpdateBusy(true);
-        markUpdateRunning(result.name);
-        try {
-          const applied = await api<UpdateStatus>("/system/update/apply", {
-            method: "POST",
-            body: JSON.stringify({
-              package_name: result.name,
-              channel: updateChannel,
-              script_name: "update.sh",
-              dry_run: dryRun,
-              auto_rebuild_docker: updateConfig?.auto_rebuild_docker,
-              auto_update_ubuntu: updateConfig?.auto_update_ubuntu,
-            }),
-          });
-          setUpdateStatus(applied);
-          setStatus(applied.state === "success" ? "Update voltooid" : "Update mislukt");
-          await loadUpdateData();
-          if (shouldForceReloginAfterRebuild(applied)) {
-            forceReloginAfterRebuild();
-            return;
-          }
-        } catch (err) {
-          if (isLikelyRestartInterruption(err) && !dryRun && Boolean(updateConfig?.auto_rebuild_docker ?? true)) {
-            forceReloginAfterRebuild();
-            return;
-          }
-          setStatus(err instanceof Error ? err.message : "Update mislukt");
-          await loadUpdateData();
+      setUpdateBusy(true);
+      markUpdateRunning(result.name);
+      try {
+        const applied = await api<UpdateStatus>("/system/update/apply", {
+          method: "POST",
+          body: JSON.stringify({
+            package_name: result.name,
+            channel: updateChannel,
+            script_name: "update.sh",
+            dry_run: dryRun,
+            auto_rebuild_docker: updateConfig?.auto_rebuild_docker,
+            auto_update_ubuntu: updateConfig?.auto_update_ubuntu,
+          }),
+        });
+        setUpdateStatus(applied);
+        setStatus(applied.state === "success" ? "Update voltooid" : "Update mislukt");
+        if (applied.state === "success") {
+          setCheckResult({ version: applied.installed_version ?? result.version ?? null, up_to_date: true, notes: updatePrompt?.notes ?? null });
+          setUpdatePrompt(null);
         }
-        setUpdateBusy(false);
+        await loadUpdateData();
+        if (shouldForceReloginAfterRebuild(applied)) {
+          forceReloginAfterRebuild();
+          return;
+        }
+      } catch (err) {
+        if (isLikelyRestartInterruption(err) && !dryRun && Boolean(updateConfig?.auto_rebuild_docker ?? true)) {
+          forceReloginAfterRebuild();
+          return;
+        }
+        setStatus(err instanceof Error ? err.message : "Update mislukt");
+        await loadUpdateData();
       }
+      setUpdateBusy(false);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Laatste update ophalen mislukt");
     }
     setFetchBusy(false);
   }
 
+  async function runUpdateCheck(showPrompt: boolean) {
+    type CheckPayload = { version: string | null; up_to_date: boolean; notes: string | null; installed_version: string | null };
+    const check = await api<CheckPayload>("/system/update/check-latest", {
+      method: "POST",
+      body: JSON.stringify({ channel: updateChannel }),
+    });
+
+    if (check.up_to_date) {
+      const label = check.version ? `v${check.version}` : "de huidige versie";
+      setCheckResult({ version: check.version, up_to_date: true, notes: check.notes });
+      setUpdatePrompt(null);
+      if (showPrompt) {
+        setStatus(`Je draait al ${label} — geen update beschikbaar.`);
+      }
+      return;
+    }
+
+    setCheckResult({ version: check.version, up_to_date: false, notes: check.notes });
+    setUpdatePrompt({ version: check.version, notes: check.notes, installedVersion: check.installed_version });
+
+    if (!showPrompt && updateConfig?.auto_install_nightly && !nightlyInstallRef.current && !updateBusy && !fetchBusy) {
+      const now = new Date();
+      const nightlyHour = Math.max(0, Math.min(23, updateConfig?.nightly_install_hour ?? 3));
+      const dailyKey = `nightly_update_done_${now.toISOString().slice(0, 10)}_${updateChannel}`;
+      if (now.getHours() === nightlyHour && sessionStorage.getItem(dailyKey) !== "1") {
+        nightlyInstallRef.current = true;
+        setStatus(`Nacht-update gestart voor ${check.version ? `v${check.version}` : "beschikbare update"}...`);
+        try {
+          await fetchLatestUpdate();
+          sessionStorage.setItem(dailyKey, "1");
+        } finally {
+          nightlyInstallRef.current = false;
+        }
+        return;
+      }
+    }
+
+    if (showPrompt) {
+      const label = check.version ? `v${check.version}` : "een nieuwe versie";
+      if (updateConfig?.auto_install_nightly) {
+        setStatus(`Update beschikbaar: ${label}. Geplande nacht-installatie: ${formatNightlyWindow(updateConfig?.nightly_install_hour ?? 3)}.`);
+      } else {
+        setStatus(`Update beschikbaar: ${label}. Je kan nu installeren.`);
+      }
+    }
+  }
+
   async function checkAndFetchLatestUpdate() {
     setFetchBusy(true);
     setStatus("");
-    setCheckResult(null);
     try {
-      type CheckResult = { version: string | null; up_to_date: boolean; notes: string | null; installed_version: string | null };
-      const check = await api<CheckResult>("/system/update/check-latest", {
-        method: "POST",
-        body: JSON.stringify({ channel: updateChannel }),
-      });
-      if (check.up_to_date) {
-        const label = check.version ? `v${check.version}` : "de huidige versie";
-        setCheckResult({ version: check.version, up_to_date: true, notes: check.notes });
-        setStatus(`Je draait al ${label} — geen update beschikbaar.`);
-        setFetchBusy(false);
-        return;
-      }
-      setCheckResult({ version: check.version, up_to_date: false, notes: check.notes });
-      const label = check.version ? `v${check.version}` : "een nieuwe versie";
-      const shouldDownload = window.confirm(`Nieuwe update beschikbaar: ${label}.\nNu downloaden en installeren?`);
-      if (!shouldDownload) {
-        setStatus(`Update ${label} beschikbaar maar niet gedownload.`);
-        setFetchBusy(false);
-        return;
-      }
-      await fetchLatestUpdate();
+      await runUpdateCheck(true);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Update controleren mislukt");
-      setFetchBusy(false);
     }
+    setFetchBusy(false);
   }
 
   async function uploadUpdatePackage() {
@@ -781,7 +819,25 @@ export default function SettingsPage() {
     });
   }, [packages, updateChannel]);
 
-  function shouldShowSection(sectionKey: "info" | "mail" | "api"): boolean {
+  useEffect(() => {
+    if (!updateConfig?.auto_check_updates) return;
+    let cancelled = false;
+    const timer = setInterval(() => {
+      if (cancelled) return;
+      void runUpdateCheck(false).catch(() => {
+        // silent auto-check failures should not break the UI
+      });
+    }, 300000);
+    void runUpdateCheck(false).catch(() => {
+      // ignore initial silent check failure
+    });
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [updateChannel, updateConfig?.auto_check_updates]);
+
+  function shouldShowSection(sectionKey: "info" | "storage" | "mail" | "api"): boolean {
     return sectionFilter === sectionKey;
   }
 
@@ -799,6 +855,15 @@ export default function SettingsPage() {
             >
               <Server className="h-4 w-4" />
               Info
+            </button>
+            <button
+              onClick={() => {
+                setSectionFilter("storage");
+              }}
+              className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${sectionFilter === "storage" ? "bg-accent/15 text-accent" : "hover:bg-card/40"}`}
+            >
+              <HardDrive className="h-4 w-4" />
+              Opslag
             </button>
             <button
               onClick={() => {
@@ -879,10 +944,10 @@ export default function SettingsPage() {
         </SectionShell>
         )}
 
-        {shouldShowSection("info") && (
+        {shouldShowSection("storage") && (
         <SectionShell
           icon={<HardDrive className="h-5 w-5" />}
-          eyebrow="Opslag"
+          eyebrow="Storage"
           title="Huidige opslag"
           description="Volg het actieve opslagdoel en wijzig veilig de hoofdlocatie voor cloudbestanden."
           aside={
@@ -935,10 +1000,10 @@ export default function SettingsPage() {
         </SectionShell>
         )}
 
-        {shouldShowSection("info") && (
+        {shouldShowSection("storage") && (
         <SectionShell
           icon={<Boxes className="h-5 w-5" />}
-          eyebrow="Opslag"
+          eyebrow="Storage"
           title="Beschikbare mount points"
           description="Bekijk gedetecteerde schijven en schakel snel naar een andere mount wanneer nodig."
         >
@@ -1510,6 +1575,38 @@ Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
             <label className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
               <input
                 type="checkbox"
+                checked={Boolean(updateConfig?.auto_check_updates)}
+                onChange={(e) => setUpdateConfig((prev) => (prev ? { ...prev, auto_check_updates: e.target.checked } : prev))}
+              />
+              Automatisch controleren op updates
+            </label>
+            <label className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                checked={Boolean(updateConfig?.auto_install_nightly)}
+                onChange={(e) => setUpdateConfig((prev) => (prev ? { ...prev, auto_install_nightly: e.target.checked } : prev))}
+              />
+              's Nachts automatisch installeren
+            </label>
+            <div>
+              <label className="block text-sm font-medium">Nacht-installatie uur</label>
+              <input
+                type="number"
+                min={0}
+                max={23}
+                value={updateConfig?.nightly_install_hour ?? 3}
+                onChange={(e) =>
+                  setUpdateConfig((prev) =>
+                    prev ? { ...prev, nightly_install_hour: Math.max(0, Math.min(23, Number(e.target.value) || 0)) } : prev
+                  )
+                }
+                className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+              />
+              <p className="mt-1 text-xs opacity-60">Actief tijdsvenster: {formatNightlyWindow(updateConfig?.nightly_install_hour ?? 3)}</p>
+            </div>
+            <label className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
+              <input
+                type="checkbox"
                 checked={Boolean(updateConfig?.auto_rebuild_docker)}
                 onChange={(e) => setUpdateConfig((prev) => (prev ? { ...prev, auto_rebuild_docker: e.target.checked } : prev))}
               />
@@ -1543,8 +1640,48 @@ Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
                   ? "✓ Al up-to-date"
                   : "Update controleren"}
               </button>
+              {updatePrompt && !updateConfig?.auto_install_nightly && (
+                <button
+                  onClick={() => void fetchLatestUpdate()}
+                  disabled={fetchBusy || updateBusy}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                >
+                  Nu installeren
+                </button>
+              )}
             </div>
           </div>
+
+          {updatePrompt && (
+            <div className="mt-4 rounded-[1.5rem] border border-accent/30 bg-accent/10 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">Update beschikbaar {updatePrompt.version ? `(v${updatePrompt.version})` : ""}</p>
+                  <p className="mt-1 text-xs opacity-70">
+                    Huidige versie: {updatePrompt.installedVersion ? `v${updatePrompt.installedVersion}` : "onbekend"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setUpdatePrompt(null)}
+                  className="rounded-lg border border-border bg-card px-2 py-1 text-xs transition hover:bg-card/70"
+                  aria-label="Melding sluiten"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              {updatePrompt.notes && (
+                <div className="mt-3 rounded-xl border border-border bg-card/40 p-3">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wider opacity-60">Releasenotes</p>
+                  <pre className="whitespace-pre-wrap text-xs leading-relaxed">{updatePrompt.notes}</pre>
+                </div>
+              )}
+              {updateConfig?.auto_install_nightly ? (
+                <p className="mt-3 text-xs opacity-70">
+                  Nacht-update ingeschakeld: deze update wordt automatisch verwerkt in venster {formatNightlyWindow(updateConfig?.nightly_install_hour ?? 3)}.
+                </p>
+              ) : null}
+            </div>
+          )}
 
           <p className="mt-3 text-xs opacity-60">Vaste nabehandeling na een succesvolle update: sudo docker compose -f docker-compose.prod.yml up -d --build</p>
 

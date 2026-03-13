@@ -66,6 +66,7 @@ function csrfToken() {
 function redirectToLogin() {
   if (typeof window === "undefined") return;
   sessionStorage.setItem("auth_notice", "Sessie verlopen. Log opnieuw in om verder te gaan.");
+  sessionStorage.setItem("auth_notice_type", "warning");
   window.location.replace("/login");
 }
 
@@ -206,6 +207,7 @@ export async function ensureSession(): Promise<boolean> {
     if (response.status === 401) {
       localStorage.removeItem("access_token");
       sessionStorage.setItem("auth_notice", "Sessie verlopen. Log opnieuw in om verder te gaan.");
+      sessionStorage.setItem("auth_notice_type", "warning");
       return false;
     }
 
