@@ -53,9 +53,23 @@ export function isSessionExpiredError(error: unknown): boolean {
   return error instanceof Error && error.message.toLowerCase().includes("sessie verlopen");
 }
 
+const SESSION_CHECK_CACHE_MS = 5000;
+const SESSION_CHECK_RATE_LIMIT_COOLDOWN_MS = 15000;
+
+let redirectingToLogin = false;
+let inflightSessionCheck: Promise<boolean> | null = null;
+let lastSessionCheckAt = 0;
+let lastSessionCheckResult = false;
+let sessionCheckRateLimitedUntil = 0;
+
 function authHeaders() {
   if (typeof window === "undefined") return {};
-  const token = localStorage.getItem("access_token");
+  let token: string | null = null;
+  try {
+    token = localStorage.getItem("access_token");
+  } catch {
+    token = null;
+  }
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
@@ -69,6 +83,8 @@ function csrfToken() {
 
 function redirectToLogin() {
   if (typeof window === "undefined") return;
+  if (redirectingToLogin) return;
+  redirectingToLogin = true;
   try {
     sessionStorage.setItem("auth_notice", "Sessie verlopen. Log opnieuw in om verder te gaan.");
     sessionStorage.setItem("auth_notice_type", "warning");
@@ -163,7 +179,12 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export async function uploadFile(file: File, folderId?: string) {
-  const token = localStorage.getItem("access_token");
+  let token: string | null = null;
+  try {
+    token = localStorage.getItem("access_token");
+  } catch {
+    token = null;
+  }
   const csrf = csrfToken();
   const formData = new FormData();
   formData.append("upload", file);
@@ -219,40 +240,68 @@ export async function ensureSession(options?: { requireConfirmedAuth?: boolean }
   if (!accessToken) return false;
 
   const requireConfirmedAuth = options?.requireConfirmedAuth === true;
+  const now = Date.now();
 
-  try {
-    const response = await fetch(`${getApiBase()}/auth/me`, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${accessToken}` },
-      credentials: "include",
-      cache: "no-store",
-    });
+  if (!requireConfirmedAuth && now - lastSessionCheckAt < SESSION_CHECK_CACHE_MS) {
+    return lastSessionCheckResult;
+  }
 
-    if (response.status === 401) {
-      try {
-        localStorage.removeItem("access_token");
-      } catch {
-        // Ignore storage errors.
-      }
-      try {
-        sessionStorage.setItem("auth_notice", "Sessie verlopen. Log opnieuw in om verder te gaan.");
-        sessionStorage.setItem("auth_notice_type", "warning");
-      } catch {
-        // Ignore storage errors.
-      }
-      return false;
-    }
-
-    if (response.ok) {
-      return true;
-    }
-
-    if (requireConfirmedAuth) {
-      return false;
-    }
-
-    return true;
-  } catch {
+  if (sessionCheckRateLimitedUntil > now) {
     return requireConfirmedAuth ? false : true;
   }
+
+  if (inflightSessionCheck) {
+    const result = await inflightSessionCheck;
+    return requireConfirmedAuth ? result : result || true;
+  }
+
+  inflightSessionCheck = (async () => {
+    try {
+      const response = await fetch(`${getApiBase()}/auth/me`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        credentials: "include",
+        cache: "no-store",
+      });
+
+      if (response.status === 401) {
+        try {
+          localStorage.removeItem("access_token");
+        } catch {
+          // Ignore storage errors.
+        }
+        try {
+          sessionStorage.setItem("auth_notice", "Sessie verlopen. Log opnieuw in om verder te gaan.");
+          sessionStorage.setItem("auth_notice_type", "warning");
+        } catch {
+          // Ignore storage errors.
+        }
+        return false;
+      }
+
+      if (response.status === 429) {
+        sessionCheckRateLimitedUntil = Date.now() + SESSION_CHECK_RATE_LIMIT_COOLDOWN_MS;
+        return false;
+      }
+
+      if (response.ok) {
+        return true;
+      }
+
+      return false;
+    } catch {
+      return false;
+    }
+  })();
+
+  const checked = await inflightSessionCheck;
+  inflightSessionCheck = null;
+  lastSessionCheckAt = Date.now();
+  lastSessionCheckResult = checked;
+
+  if (requireConfirmedAuth) {
+    return checked;
+  }
+
+  return checked || true;
 }

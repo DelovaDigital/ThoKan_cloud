@@ -777,7 +777,8 @@ class SettingsViewModel {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !trimmed.isEmpty else { return nil }
         let withoutPrefix = trimmed.hasPrefix("v") ? String(trimmed.dropFirst()) : trimmed
-        let core = withoutPrefix.split(separator: "-", maxSplits: 1).first.map(String.init) ?? withoutPrefix
+        let withoutBuild = withoutPrefix.split(separator: "+", maxSplits: 1).first.map(String.init) ?? withoutPrefix
+        let core = withoutBuild.split(separator: "-", maxSplits: 1).first.map(String.init) ?? withoutBuild
         return core
     }
 
