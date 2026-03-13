@@ -28,13 +28,24 @@ export default function LoginPage() {
 
     void checkExistingSession();
 
-    const notice = sessionStorage.getItem("auth_notice");
-    const type = sessionStorage.getItem("auth_notice_type");
+    let notice: string | null = null;
+    let type: string | null = null;
+    try {
+      notice = sessionStorage.getItem("auth_notice");
+      type = sessionStorage.getItem("auth_notice_type");
+    } catch {
+      notice = null;
+      type = null;
+    }
     if (notice) {
       setError(notice);
       setNoticeType(type === "success" ? "success" : "warning");
-      sessionStorage.removeItem("auth_notice");
-      sessionStorage.removeItem("auth_notice_type");
+      try {
+        sessionStorage.removeItem("auth_notice");
+        sessionStorage.removeItem("auth_notice_type");
+      } catch {
+        // Ignore storage errors.
+      }
     }
 
     return () => {
@@ -53,8 +64,19 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      localStorage.setItem("access_token", response.access_token);
-      sessionStorage.removeItem("auth_notice");
+      try {
+        localStorage.setItem("access_token", response.access_token);
+      } catch {
+        setError("Browser-opslag geblokkeerd. Sta cookies/local storage toe en probeer opnieuw.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        sessionStorage.removeItem("auth_notice");
+      } catch {
+        // Ignore storage errors.
+      }
       
       router.push("/dashboard");
     } catch (err) {

@@ -7,6 +7,32 @@ import { getApiBase } from "@/lib/api";
 const POLL_INTERVAL_MS = 2500;
 const TIMEOUT_MS = 300_000; // 5 minutes
 
+async function redirectToLoginWithNotice(message: string, type: "success" | "warning") {
+  try {
+    localStorage.removeItem("access_token");
+  } catch {
+    // Ignore storage errors.
+  }
+
+  try {
+    sessionStorage.setItem("auth_notice", message);
+    sessionStorage.setItem("auth_notice_type", type);
+  } catch {
+    // Ignore storage errors.
+  }
+
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.update().catch(() => undefined)));
+    } catch {
+      // Ignore SW update errors.
+    }
+  }
+
+  window.location.replace(`/login?r=${Date.now()}`);
+}
+
 export default function RestartingPage() {
   const [dots, setDots] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -41,13 +67,10 @@ export default function RestartingPage() {
           // Any real HTTP response means the server is up
           if (res.status === 200 || res.status === 401 || res.status === 403) {
             if (!cancelled) {
-              localStorage.removeItem("access_token");
-              sessionStorage.setItem(
-                "auth_notice",
-                "Update toegepast en services herstart. Log opnieuw in om verder te gaan."
+              await redirectToLoginWithNotice(
+                "Update toegepast en services herstart. Log opnieuw in om verder te gaan.",
+                "success"
               );
-              sessionStorage.setItem("auth_notice_type", "success");
-              window.location.replace("/login");
             }
             return;
           }
@@ -57,10 +80,7 @@ export default function RestartingPage() {
       }
       // Timed out: go to login anyway
       if (!cancelled) {
-        localStorage.removeItem("access_token");
-        sessionStorage.setItem("auth_notice", "Herstart duurde te lang. Probeer opnieuw in te loggen.");
-        sessionStorage.setItem("auth_notice_type", "warning");
-        window.location.replace("/login");
+        await redirectToLoginWithNotice("Herstart duurde te lang. Probeer opnieuw in te loggen.", "warning");
       }
     }
 
