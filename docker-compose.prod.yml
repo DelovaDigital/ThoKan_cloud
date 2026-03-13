@@ -45,8 +45,6 @@ services:
         NEXT_PUBLIC_NATIVE_API_BASE_URL: ${NEXT_PUBLIC_NATIVE_API_BASE_URL:-}
     environment:
       NEXT_PUBLIC_API_BASE_URL: https://thokan.cloud/api/v1
-    volumes:
-      - ./frontend/out:/usr/share/nginx/html:ro
     depends_on:
       - backend
     networks:
