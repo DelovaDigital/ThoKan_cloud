@@ -59,14 +59,14 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (isNative) {
+    if (isNative) {
     return (
-      <div className="min-h-screen bg-bg pt-safe-top-offset pb-32">
+      <div className="min-h-screen bg-bg pt-safe-top-offset pb-36">
         <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_35%),radial-gradient(circle_at_bottom,_rgba(14,165,233,0.08),_transparent_30%)]" />
         <main className="relative px-3 py-3">{children}</main>
 
-        <nav className="bottom-safe-lift fixed inset-x-3 z-30 rounded-[1.75rem] border border-border/60 bg-card/90 p-2 shadow-glass backdrop-blur-md hide-scrollbar">
-          <div className="grid grid-cols-6 gap-1">
+        <nav className="bottom-safe-lift fixed inset-x-3 z-30 rounded-[1.75rem] border border-border/60 bg-card/90 p-3 shadow-glass backdrop-blur-md hide-scrollbar">
+          <div className="flex flex-wrap justify-between gap-1">
             {items.map((item) => {
               const active = pathname.startsWith(item.href);
               const Icon = item.icon;
@@ -75,7 +75,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2.5 text-[11px] transition ${
+                  className={`flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2.5 text-[11px] flex-1 basis-1/6 transition ${
                     active ? "bg-accent/15 text-accent" : "opacity-70"
                   }`}
                 >
