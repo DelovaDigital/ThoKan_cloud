@@ -767,14 +767,22 @@ def apply_update_package(
             if script_path.name == "update.sh":
                 try:
                     script_content = script_path.read_text(encoding="utf-8")
-                    if "TARGET_ROOT=\"/opt/thokan-cloud\"" in script_content and "THOKAN_TARGET_ROOT" not in script_content:
-                        script_path.write_text(
-                            script_content.replace(
-                                'TARGET_ROOT="/opt/thokan-cloud"',
-                                'TARGET_ROOT="${THOKAN_TARGET_ROOT:-/opt/thokan-cloud}"',
-                            ),
-                            encoding="utf-8",
+                    patched = script_content
+                    if 'TARGET_ROOT="/opt/thokan-cloud"' in patched and "THOKAN_TARGET_ROOT" not in patched:
+                        patched = patched.replace(
+                            'TARGET_ROOT="/opt/thokan-cloud"',
+                            'TARGET_ROOT="${THOKAN_TARGET_ROOT:-/opt/thokan-cloud}"',
                         )
+                    old_rsync = 'rsync -a --delete --ignore-errors "${PAYLOAD_DIR}/" "${TARGET_ROOT}/"'
+                    new_rsync = old_rsync + ' || { rc=$?; [[ $rc -eq 23 || $rc -eq 24 ]] || exit $rc; }'
+                    if old_rsync in patched and "rc=$?" not in patched:
+                        patched = patched.replace(old_rsync, new_rsync)
+                    old_rsync_bare = 'rsync -a --delete "${PAYLOAD_DIR}/" "${TARGET_ROOT}/"'
+                    new_rsync_bare = 'rsync -a --delete --ignore-errors "${PAYLOAD_DIR}/" "${TARGET_ROOT}/" || { rc=$?; [[ $rc -eq 23 || $rc -eq 24 ]] || exit $rc; }'
+                    if old_rsync_bare in patched and "--ignore-errors" not in patched:
+                        patched = patched.replace(old_rsync_bare, new_rsync_bare)
+                    if patched != script_content:
+                        script_path.write_text(patched, encoding="utf-8")
                 except Exception:
                     pass
 
