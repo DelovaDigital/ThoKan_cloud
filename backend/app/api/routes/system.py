@@ -892,7 +892,7 @@ def apply_update_package(
                     # Matches lines like: rsync -a --delete [options] "${PAYLOAD_DIR}/" "${TARGET_ROOT}/"
                     full_rsync = (
                         'rsync -a --delete --ignore-errors'
-                        ' --exclude "storage/" --exclude ".git/" --exclude ".venv/"'
+                        ' --exclude "storage/" --exclude "docker/ssl/" --exclude ".git/" --exclude ".venv/"'
                         ' --exclude "node_modules/" --exclude ".next/" --exclude "__pycache__/" --exclude "*.pyc"'
                         ' "${PAYLOAD_DIR}/" "${TARGET_ROOT}/"'
                         ' || { rc=$?; [[ $rc -eq 23 || $rc -eq 24 ]] || exit $rc; }'
