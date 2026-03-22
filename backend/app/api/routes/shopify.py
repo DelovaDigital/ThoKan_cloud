@@ -4,7 +4,7 @@ import base64
 import hashlib
 import re
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, unquote, urlparse
 
 import httpx
@@ -106,6 +106,17 @@ def _encrypt_secret(value: str) -> tuple[str, str]:
 
 def _resolve_access_token(db: Session, user_id: str, raw: dict, store_domain: str) -> str:
     existing_token = _normalize_access_token(_decrypted_token(raw))
+    expires_at_raw = (raw.get("access_token_expires_at") or "").strip()
+    if existing_token and _is_token_still_valid(expires_at_raw):
+        return existing_token
+
+    client_id = (raw.get("client_id") or "").strip()
+    client_secret = _decrypted_secret(raw, "client_secret_enc", "client_secret_iv")
+    if client_id and client_secret and store_domain:
+        token, expires_at = _request_shopify_client_credentials_token(store_domain, client_id, client_secret)
+        _persist_shopify_access_token(db, user_id, raw, token, expires_at)
+        return token
+
     if existing_token:
         return existing_token
 
@@ -115,12 +126,79 @@ def _resolve_access_token(db: Session, user_id: str, raw: dict, store_domain: st
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "Shopify Admin API orders require an Admin API access token (shpat_...). "
-                "Client ID/Secret alone cannot fetch orders. Generate/install your app token and save it in Settings."
+                "Shopify access token kon niet automatisch opgehaald worden met client credentials. "
+                "Controleer client_id, client_secret en store_domain."
             ),
         )
 
     return ""
+
+
+def _is_token_still_valid(expires_at_raw: str) -> bool:
+    if not expires_at_raw:
+        return True
+
+    try:
+        parsed = datetime.fromisoformat(expires_at_raw.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return True
+
+    refresh_window = datetime.now(timezone.utc) + timedelta(seconds=30)
+    return parsed > refresh_window
+
+
+def _request_shopify_client_credentials_token(store_domain: str, client_id: str, client_secret: str) -> tuple[str, str | None]:
+    token_url = f"https://{store_domain}/admin/oauth/access_token"
+    payload = {
+        "grant_type": "client_credentials",
+        "client_id": client_id,
+        "client_secret": client_secret,
+    }
+
+    with httpx.Client(timeout=20.0) as client:
+        response = client.post(
+            token_url,
+            data=payload,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+    if response.status_code >= 400:
+        detail = response.text[:400]
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Shopify token ophalen mislukt ({response.status_code}): {detail}",
+        )
+
+    data = response.json() if response.content else {}
+    token = _normalize_access_token(str(data.get("access_token") or ""))
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Shopify token response bevat geen access_token",
+        )
+
+    expires_at: str | None = None
+    expires_in = data.get("expires_in")
+    if isinstance(expires_in, (int, float)) and expires_in > 0:
+        expires_at = (datetime.now(timezone.utc) + timedelta(seconds=int(expires_in))).isoformat()
+
+    return token, expires_at
+
+
+def _persist_shopify_access_token(db: Session, user_id: str, raw: dict, token: str, expires_at: str | None) -> None:
+    access_token_enc, access_token_iv = _encrypt_secret(token)
+    updated = dict(raw)
+    updated["access_token_enc"] = access_token_enc
+    updated["access_token_iv"] = access_token_iv
+    updated["access_token_expires_at"] = expires_at
+
+    target_key = _shopify_key(user_id)
+    if _is_global_shopify_config(db, user_id):
+        target_key = _global_shopify_key()
+
+    _save_config(db, target_key, user_id, updated)
 
 
 def _shopify_request(db: Session, user_id: str, raw: dict, path: str, params: dict | None = None) -> dict:

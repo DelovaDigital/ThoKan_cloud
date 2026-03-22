@@ -341,21 +341,15 @@ struct DashboardTab: View {
 // MARK: - Files Tab
 
 struct FilesTab: View {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var viewModel = FilesViewModel()
     @State private var folderStack: [FolderItem] = []
     @State private var isCreateFolderPresented = false
     @State private var newFolderName = ""
     @State private var isFileImporterPresented = false
     @State private var selectedFileForMove: FileItem?
-    @State private var selectedFileId: String?
 
     private var currentTitle: String {
         folderStack.last?.name ?? "Files"
-    }
-
-    private var selectedFile: FileItem? {
-        viewModel.files.first(where: { $0.id == selectedFileId })
     }
 
     private var currentPath: String {
@@ -366,21 +360,12 @@ struct FilesTab: View {
         viewModel.files.count + viewModel.folders.count
     }
 
-    @ViewBuilder
-    private var compactContent: some View {
+    private var contentList: some View {
         List {
-            Section {
-                CloudHeroCard(
-                    title: currentTitle,
-                    subtitle: "\(viewModel.files.count) files • \(viewModel.folders.count) folders",
-                    badges: [
-                        ("Path", currentPath),
-                        ("Storage", viewModel.usedStorage),
-                        ("Items", "\(totalItemCount)")
-                    ]
-                )
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
+            Section("Overzicht") {
+                LabeledContent("Pad", value: currentPath)
+                LabeledContent("Items", value: "\(totalItemCount)")
+                LabeledContent("Opslag", value: viewModel.usedStorage)
             }
 
             if let operation = viewModel.operationMessage {
@@ -403,7 +388,6 @@ struct FilesTab: View {
                         Button {
                             Task {
                                 folderStack.append(folder)
-                                selectedFileId = nil
                                 await viewModel.fetchFiles(folderId: folder.id)
                             }
                         } label: {
@@ -435,98 +419,6 @@ struct FilesTab: View {
             }
         }
     }
-
-    @ViewBuilder
-    private var regularContent: some View {
-        HStack(alignment: .top, spacing: 18) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    CloudHeroCard(
-                        title: currentTitle,
-                        subtitle: "Werk met een vaste detailkolom in plaats van losse previews.",
-                        badges: [
-                            ("Path", currentPath),
-                            ("Storage", viewModel.usedStorage),
-                            ("Items", "\(totalItemCount)")
-                        ]
-                    )
-
-                    if let operation = viewModel.operationMessage {
-                        Text(operation)
-                            .foregroundStyle(.green)
-                            .cloudCardStyle()
-                    }
-
-                    if let error = viewModel.errorMessage {
-                        Text(error)
-                            .foregroundStyle(.red)
-                            .cloudCardStyle()
-                    }
-
-                    if !viewModel.folders.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Folders")
-                                .font(.headline)
-
-                            ForEach(viewModel.folders, id: \.id) { folder in
-                                Button {
-                                    Task {
-                                        folderStack.append(folder)
-                                        selectedFileId = nil
-                                        await viewModel.fetchFiles(folderId: folder.id)
-                                    }
-                                } label: {
-                                    FolderRow(folder: folder)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .cloudCardStyle()
-                    }
-
-                    if !viewModel.files.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Files")
-                                .font(.headline)
-
-                            ForEach(viewModel.files, id: \.id) { file in
-                                Button {
-                                    selectedFileId = file.id
-                                } label: {
-                                    FileSelectionRow(file: file, isSelected: selectedFileId == file.id)
-                                }
-                                .buttonStyle(.plain)
-                                .contextMenu {
-                                    Button("Move") {
-                                        selectedFileForMove = file
-                                    }
-                                }
-                            }
-                        }
-                        .cloudCardStyle()
-                    }
-                }
-                .padding()
-            }
-            .frame(maxWidth: 360)
-
-            Group {
-                if let file = selectedFile {
-                    FileDetailView(file: file)
-                } else {
-                    ContentUnavailableView(
-                        "Selecteer een file",
-                        systemImage: "doc.text.magnifyingglass",
-                        description: Text("Kies links een bestand om metadata, preview en downloadacties in een vaste kolom te openen.")
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .padding(.vertical, 8)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
     
     var body: some View {
         NavigationStack {
@@ -536,11 +428,7 @@ struct FilesTab: View {
                 } else if viewModel.files.isEmpty && viewModel.folders.isEmpty {
                     ContentUnavailableView("No items here", systemImage: "folder", description: Text("This folder is empty."))
                 } else {
-                    if horizontalSizeClass == .regular {
-                        regularContent
-                    } else {
-                        compactContent
-                    }
+                    contentList
                 }
             }
             .background(Color(uiColor: .systemGroupedBackground))
@@ -551,7 +439,6 @@ struct FilesTab: View {
                         Button("Back") {
                             Task {
                                 _ = folderStack.popLast()
-                                selectedFileId = nil
                                 await viewModel.fetchFiles(folderId: folderStack.last?.id)
                             }
                         }
@@ -1710,25 +1597,6 @@ struct MailSelectionRow: View {
 
     var body: some View {
         MailMessageRow(message: message)
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                (isSelected ? Color.blue.opacity(0.12) : Color(uiColor: .secondarySystemBackground)),
-                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(isSelected ? Color.blue.opacity(0.45) : Color.clear, lineWidth: 1)
-            )
-    }
-}
-
-struct FileSelectionRow: View {
-    let file: FileItem
-    let isSelected: Bool
-
-    var body: some View {
-        FileRow(file: file)
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
