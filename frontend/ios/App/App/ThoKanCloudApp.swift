@@ -79,31 +79,49 @@ struct LoginView: View {
     private var hasLogo: Bool {
         UIImage(named: "Logo") != nil
     }
+
+    private let highlights: [(String, String, String)] = [
+        ("icloud.and.arrow.down.fill", "Workspace cockpit", "Files, mail en commerce in een duidelijke native laag."),
+        ("arrow.triangle.2.circlepath.circle.fill", "Cloud sync", "Instellingen en wachtrijen blijven gelijk met de cloudworkspace."),
+        ("shippingbox.fill", "Shopify feed", "Orderevents en klantcontext zitten direct in de app.")
+    ]
     
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
-                    VStack(spacing: 12) {
+                VStack(spacing: 28) {
+                    VStack(spacing: 14) {
                         if hasLogo {
                             Image("Logo")
                                 .resizable()
                                 .scaledToFit()
-                                .frame(height: 84)
+                                .frame(height: 88)
                         } else {
                             Image(systemName: "icloud.fill")
-                                .font(.system(size: 54, weight: .semibold))
-                                .foregroundStyle(.tint)
+                                .font(.system(size: 56, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 88, height: 88)
+                                .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
                         }
 
                         Text("ThoKan Cloud")
                             .font(.largeTitle.bold())
+                            .foregroundStyle(.white)
 
-                        Text("Connect directly to your cloud environment")
+                        Text("Werk native in dezelfde cockpit als web: files, mail, chat en commerce zonder losse flows.")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.white.opacity(0.84))
                     }
-                    .padding(.top, 24)
+                    .padding(24)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        LinearGradient(
+                            colors: [Color.blue.opacity(0.92), Color.indigo.opacity(0.82), Color.cyan.opacity(0.64)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    )
 
                     VStack(spacing: 16) {
                         TextField("Email", text: $email)
@@ -146,6 +164,30 @@ struct LoginView: View {
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .fill(Color(uiColor: .secondarySystemGroupedBackground))
                     )
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Wat je meteen krijgt")
+                            .font(.headline)
+
+                        ForEach(Array(highlights.enumerated()), id: \.offset) { _, item in
+                            HStack(alignment: .top, spacing: 12) {
+                                Image(systemName: item.0)
+                                    .font(.headline)
+                                    .foregroundStyle(.blue)
+                                    .frame(width: 38, height: 38)
+                                    .background(Color.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(item.1)
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(item.2)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    .cloudCardStyle()
 
                     VStack(alignment: .leading, spacing: 8) {
                         Label(APIConfig.baseURL, systemImage: "network")
@@ -196,19 +238,25 @@ struct MainTabView: View {
                 }
                 .tag(3)
 
+            ShopifyTab()
+                .tabItem {
+                    Label("Shopify", systemImage: "shippingbox")
+                }
+                .tag(4)
+
             if isAdmin {
                 AdminTab()
                     .tabItem {
                         Label("Admin", systemImage: "slider.horizontal.3")
                     }
-                    .tag(4)
+                    .tag(5)
             }
 
             SettingsTab()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape")
                 }
-                .tag(isAdmin ? 5 : 4)
+                .tag(isAdmin ? 6 : 5)
         }
         .tint(.blue)
         .task {
@@ -237,8 +285,10 @@ final class AppNotificationMonitor: NSObject, UNUserNotificationCenterDelegate {
     private var pollingTask: Task<Void, Never>?
 
     private let mailNotificationEnabledKey = "mailNotificationsEnabled"
+    private let shopifyNotificationEnabledKey = "shopifyNotificationsEnabled"
     private let chatNotificationEnabledKey = "chatNotificationsEnabled"
     private let lastMailIdKey = "lastMailNotificationId"
+    private let lastShopifyEventIdKey = "lastShopifyNotificationId"
     private let lastChatMessageByUserKey = "lastChatMessageByUser"
 
     func start() {
@@ -270,7 +320,9 @@ final class AppNotificationMonitor: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private func requestAuthorizationIfNeeded() async {
-        guard isNotificationEnabled(forKey: mailNotificationEnabledKey) || isNotificationEnabled(forKey: chatNotificationEnabledKey) else {
+        guard isNotificationEnabled(forKey: mailNotificationEnabledKey)
+            || isNotificationEnabled(forKey: shopifyNotificationEnabledKey)
+            || isNotificationEnabled(forKey: chatNotificationEnabledKey) else {
             return
         }
 
@@ -287,6 +339,10 @@ final class AppNotificationMonitor: NSObject, UNUserNotificationCenterDelegate {
 
         if isNotificationEnabled(forKey: mailNotificationEnabledKey) {
             await pollMail()
+        }
+
+        if isNotificationEnabled(forKey: shopifyNotificationEnabledKey) {
+            await pollShopify()
         }
 
         if isNotificationEnabled(forKey: chatNotificationEnabledKey) {
@@ -318,6 +374,37 @@ final class AppNotificationMonitor: NSObject, UNUserNotificationCenterDelegate {
             }
 
             defaults.set(latestMessage.id, forKey: lastMailIdKey)
+        } catch {
+            return
+        }
+    }
+
+    private func pollShopify() async {
+        do {
+            let response = try await apiClient.fetchShopifyChatFeed()
+            guard let latestEvent = response.events.first else { return }
+
+            let defaults = UserDefaults.standard
+            guard let previousId = defaults.string(forKey: lastShopifyEventIdKey) else {
+                defaults.set(latestEvent.id, forKey: lastShopifyEventIdKey)
+                return
+            }
+
+            guard previousId != latestEvent.id else { return }
+
+            let newEvents = response.events.prefix { $0.id != previousId }
+            for event in Array(newEvents.reversed()).suffix(3) {
+                let orderTitle = event.order_name.isEmpty ? "Order \(event.order_id)" : event.order_name
+                let customerTitle = event.customer_name.isEmpty ? event.email : event.customer_name
+                await deliverNotification(
+                    identifier: "shopify-\(event.id)",
+                    title: "Nieuw Shopify event voor \(orderTitle)",
+                    body: "\(customerTitle): \(event.message)",
+                    targetTab: 4
+                )
+            }
+
+            defaults.set(latestEvent.id, forKey: lastShopifyEventIdKey)
         } catch {
             return
         }
@@ -380,7 +467,7 @@ final class AppNotificationMonitor: NSObject, UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        completionHandler([])
+        completionHandler([.banner, .list, .sound, .badge])
     }
 
     func userNotificationCenter(

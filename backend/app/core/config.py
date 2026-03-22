@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     apns_bundle_id: str | None = None
     apns_private_key: str | None = None
     apns_use_sandbox: bool = True
+    mail_push_enabled: bool = True
+    mail_push_poll_seconds: int = 5
 
     rate_limit_per_minute: int = 120
     cors_origins: str = "http://localhost:3000,capacitor://localhost,ionic://localhost"

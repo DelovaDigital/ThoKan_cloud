@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -12,10 +14,25 @@ from app.core.csrf import CSRFMiddleware
 from app.core.rate_limit import limiter
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.core.versioning import get_runtime_version
+from app.services.mail_push_watcher import mail_push_watcher
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    mail_push_watcher.start()
+    try:
+        yield
+    finally:
+        await mail_push_watcher.stop()
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title=settings.app_name, version=get_runtime_version(), openapi_url="/api/openapi.json")
+    app = FastAPI(
+        title=settings.app_name,
+        version=get_runtime_version(),
+        openapi_url="/api/openapi.json",
+        lifespan=lifespan,
+    )
 
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

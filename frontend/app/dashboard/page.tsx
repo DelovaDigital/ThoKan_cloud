@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Activity, Boxes, HardDrive, RefreshCw, Server, ShoppingCart, Sparkles } from "lucide-react";
+import { Activity, ArrowUpRight, Boxes, HardDrive, PackageCheck, RefreshCw, Server, ShoppingCart, Sparkles } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { api } from "@/lib/api";
 
@@ -105,6 +106,38 @@ function formatBytes(bytes: number): string {
   const sizes = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
+}
+
+function formatDateLabel(value?: string): string {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString();
+}
+
+function getFulfillmentTone(status?: string): string {
+  const normalized = (status || "unfulfilled").toLowerCase();
+  if (normalized === "fulfilled") return "bg-emerald-500/12 text-emerald-600 dark:text-emerald-300";
+  if (normalized === "partial") return "bg-amber-500/12 text-amber-600 dark:text-amber-300";
+  return "bg-card/45";
+}
+
+function SummaryCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string | number;
+  hint: string;
+}) {
+  return (
+    <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">{label}</p>
+      <p className="mt-2 text-2xl font-semibold">{value}</p>
+      <p className="mt-1 text-sm opacity-60">{hint}</p>
+    </div>
+  );
 }
 
 export default function DashboardPage() {
@@ -275,6 +308,29 @@ export default function DashboardPage() {
     return rows.filter((entry) => entry.event_type === activityFilter);
   }, [data?.recent_activity, activityFilter]);
 
+  const operationsModules = useMemo(() => {
+    return [
+      {
+        title: "Bestandsbasis",
+        status: `${data?.files_count || 0} items`,
+        description: "Opslag, recente uploads en systeemcapaciteit blijven zichtbaar zonder naar de files-module te springen.",
+        href: "/files",
+      },
+      {
+        title: "Commerce flow",
+        status: `${orders.length} orders`,
+        description: "Shopify orders en Gelato-afhandeling zitten in dezelfde operationele laag als systeemstatus.",
+        href: "/shopify",
+      },
+      {
+        title: "Integratiebasis",
+        status: filteredActivity.length > 0 ? `${filteredActivity.length} events` : "Monitor actief",
+        description: "Gebruik instellingen om globale sync, connectors en updategedrag te beheren vanuit dezelfde workspace.",
+        href: "/settings",
+      },
+    ];
+  }, [data?.files_count, orders.length, filteredActivity.length]);
+
   return (
     <LayoutShell>
       <div className="space-y-5">
@@ -287,7 +343,7 @@ export default function DashboardPage() {
               </div>
               <h1 className="mt-4 text-3xl font-semibold sm:text-4xl">Overzicht</h1>
               <p className="mt-3 max-w-3xl text-sm opacity-70 sm:text-base">
-                Volg opslag, recente activiteit en orderoperaties vanuit een heldere werkruimte voor snellere beslissingen.
+                Eén operationele cockpit voor opslag, recente activiteit, Shopify-orders en Gelato-opvolging, met vaste detailzones in plaats van losse modals.
               </p>
               <div className="mt-5 flex flex-wrap gap-3">
                 <button
@@ -305,27 +361,48 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Opslag gebruikt</p>
-                <p className="mt-2 text-2xl font-semibold">{formatBytes(data?.used_bytes || 0)}</p>
-                <p className="mt-1 text-sm opacity-60">Data van gebruikers in opslag</p>
-              </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Files</p>
-                <p className="mt-2 text-2xl font-semibold">{data?.files_count || 0}</p>
-                <p className="mt-1 text-sm opacity-60">Items in cloudopslag</p>
-              </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Systeemschijf</p>
-                <p className="mt-2 text-2xl font-semibold">{storagePercent.toFixed(1)}%</p>
-                <p className="mt-1 text-sm opacity-60">Huidig schijfgebruik platform</p>
-              </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Activiteit</p>
-                <p className="mt-2 text-2xl font-semibold">{filteredActivity.length}</p>
-                <p className="mt-1 text-sm opacity-60">Zichtbare recente events</p>
-              </div>
+              <SummaryCard label="Opslag gebruikt" value={formatBytes(data?.used_bytes || 0)} hint="Data van gebruikers in opslag" />
+              <SummaryCard label="Files" value={data?.files_count || 0} hint="Items in cloudopslag" />
+              <SummaryCard label="Systeemschijf" value={`${storagePercent.toFixed(1)}%`} hint="Huidig schijfgebruik platform" />
+              <SummaryCard label="Activiteit" value={filteredActivity.length} hint="Zichtbare recente events" />
             </div>
+          </div>
+        </section>
+
+        <section className="glass rounded-[2rem] p-5 sm:p-6">
+          <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Operationele lanes</h2>
+              <p className="mt-1 text-sm opacity-65">
+                De dashboardlaag stuurt nu door naar dezelfde vaste productstromen als de vernieuwde files-, settings- en commerce-schermen.
+              </p>
+            </div>
+            <div className="rounded-full bg-card/40 px-3 py-1 text-xs font-medium opacity-75">Vaste werkruimtehiërarchie</div>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-3">
+            {operationsModules.map((module) => (
+              <div key={module.title} className="rounded-[1.5rem] border border-border bg-card/25 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">{module.title}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.16em] opacity-45">{module.status}</p>
+                  </div>
+                  {module.title === "Bestandsbasis" ? (
+                    <HardDrive className="h-5 w-5 text-accent" />
+                  ) : module.title === "Commerce flow" ? (
+                    <PackageCheck className="h-5 w-5 text-accent" />
+                  ) : (
+                    <Activity className="h-5 w-5 text-accent" />
+                  )}
+                </div>
+                <p className="mt-3 text-sm opacity-70">{module.description}</p>
+                <Link href={module.href} className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-accent hover:underline">
+                  Open werkruimte
+                  <ArrowUpRight className="h-4 w-4" />
+                </Link>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -427,7 +504,7 @@ export default function DashboardPage() {
                   <li key={file.id} className="flex items-center justify-between gap-3 rounded-[1.5rem] border border-border bg-card/25 p-4">
                     <div className="min-w-0">
                       <span className="block truncate text-sm font-medium">{file.name}</span>
-                      <span className="mt-1 block text-xs opacity-55">{new Date(file.created_at).toLocaleString()}</span>
+                      <span className="mt-1 block text-xs opacity-55">{formatDateLabel(file.created_at)}</span>
                     </div>
                     <span className="ml-2 shrink-0 text-xs opacity-60">{formatBytes(file.size_bytes)}</span>
                   </li>
@@ -472,7 +549,7 @@ export default function DashboardPage() {
                 filteredActivity.map((entry, index) => (
                   <li key={`${entry.event_type}-${index}`} className="rounded-[1.5rem] border border-border bg-card/25 p-4">
                     <span className="text-sm font-medium">{entry.event_type}</span>
-                    <p className="mt-1 text-xs opacity-60">{new Date(entry.created_at).toLocaleString()}</p>
+                    <p className="mt-1 text-xs opacity-60">{formatDateLabel(entry.created_at)}</p>
                   </li>
                 ))
               ) : (
@@ -484,116 +561,154 @@ export default function DashboardPage() {
           </section>
         </div>
 
-        <section className="glass rounded-[2rem] p-5 sm:p-6">
-          <div className="flex flex-col gap-4 border-b border-border/60 pb-5 md:flex-row md:items-start md:justify-between">
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
-                <ShoppingCart className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Shopify bestellingen</h3>
-                <p className="mt-1 text-sm opacity-65">Bekijk de laatste shopbestellingen en open volledige orderdetails.</p>
-              </div>
-            </div>
-            <span className="rounded-full bg-card/45 px-3 py-1 text-xs opacity-70">Laatste 10</span>
-          </div>
-
-          <div className="mt-5 grid gap-2 md:grid-cols-[1fr_auto_auto]">
-            <input
-              value={ordersSearch}
-              onChange={(e) => setOrdersSearch(e.target.value)}
-              placeholder="Zoek bestelling, klant of e-mail"
-              className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
-            />
-            <select
-              value={ordersSort}
-              onChange={(e) => setOrdersSort(e.target.value as "newest" | "oldest" | "amount")}
-              className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
-            >
-              <option value="newest">Nieuwste eerst</option>
-              <option value="oldest">Oudste eerst</option>
-              <option value="amount">Hoogste bedrag</option>
-            </select>
-            <select
-              value={ordersStatusFilter}
-              onChange={(e) => setOrdersStatusFilter(e.target.value)}
-              className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
-            >
-              <option value="all">Alle afhandeling</option>
-              <option value="unfulfilled">Niet vervuld</option>
-              <option value="fulfilled">Vervuld</option>
-              <option value="partial">Gedeeltelijk</option>
-            </select>
-          </div>
-
-          {ordersError && <p className="mt-3 text-sm text-red-400">{ordersError}</p>}
-
-          <div className="mt-4 overflow-x-auto rounded-[1.5rem] border border-border bg-card/20">
-            {filteredOrders.length > 0 ? (
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left opacity-70">
-                    <th className="px-4 py-3">Bestelling</th>
-                    <th className="px-4 py-3">Klant</th>
-                    <th className="px-4 py-3">Totaal</th>
-                    <th className="px-4 py-3">Betaling</th>
-                    <th className="px-4 py-3">Afhandeling</th>
-                    <th className="px-4 py-3">Aangemaakt</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredOrders.map((order) => (
-                    <tr
-                      key={order.id}
-                      className="cursor-pointer border-b border-border/50 hover:bg-card/20"
-                      onClick={() => openOrderDetail(order.id)}
-                    >
-                      <td className="px-4 py-3 font-medium">{order.name}</td>
-                      <td className="px-4 py-3">{order.customer_name || order.email || "-"}</td>
-                      <td className="px-4 py-3">
-                        {order.total_price} {order.currency}
-                      </td>
-                      <td className="px-4 py-3">{order.financial_status || "-"}</td>
-                      <td className="px-4 py-3">{order.fulfillment_status || "niet vervuld"}</td>
-                      <td className="px-4 py-3">{order.created_at ? new Date(order.created_at).toLocaleString() : "-"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="rounded-xl border border-dashed border-border p-4 text-center text-sm opacity-60">
-                Nog geen Shopify bestellingen of Shopify is niet geconfigureerd.
-              </div>
-            )}
-          </div>
-          <p className="mt-2 text-xs opacity-60">Klik op een bestelregel om details te openen.</p>
-        </section>
-
-        {(orderDetailLoading || orderDetailError || selectedOrder) && (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-            <div className="max-h-[90vh] w-full max-w-4xl overflow-auto rounded-2xl border border-border bg-card p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Besteldetails</h3>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={sendOrderToGelato}
-                    disabled={sendToGelatoDisabled}
-                    className="rounded-lg bg-accent px-3 py-1 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-                  >
-                    {sendGelatoBusy ? "Verzenden..." : hasGelatoOrder ? "Reeds in Gelato" : "Stuur naar Gelato"}
-                  </button>
-                  <button onClick={closeOrderDetail} className="rounded-lg border border-border px-3 py-1 text-sm hover:bg-card/70">
-                    Sluiten
-                  </button>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.08fr)_380px]">
+          <section className="glass rounded-[2rem] p-5 sm:p-6">
+            <div className="flex flex-col gap-4 border-b border-border/60 pb-5 md:flex-row md:items-start md:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
+                  <ShoppingCart className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Shopify bestellingen</h3>
+                  <p className="mt-1 text-sm opacity-65">Open bestellingen inline en houd Gelato-opvolging vast in dezelfde operationele context.</p>
                 </div>
               </div>
+              <span className="rounded-full bg-card/45 px-3 py-1 text-xs opacity-70">Laatste 10</span>
+            </div>
 
-              {orderDetailLoading && <p className="text-sm opacity-70">Besteldetails laden...</p>}
-              {orderDetailError && <p className="text-sm text-red-400">{orderDetailError}</p>}
-              {sendGelatoStatus && <p className="mb-3 text-sm text-green-400">{sendGelatoStatus}</p>}
+            <div className="mt-5 grid gap-2 md:grid-cols-[1fr_auto_auto]">
+              <input
+                value={ordersSearch}
+                onChange={(e) => setOrdersSearch(e.target.value)}
+                placeholder="Zoek bestelling, klant of e-mail"
+                className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+              />
+              <select
+                value={ordersSort}
+                onChange={(e) => setOrdersSort(e.target.value as "newest" | "oldest" | "amount")}
+                className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+              >
+                <option value="newest">Nieuwste eerst</option>
+                <option value="oldest">Oudste eerst</option>
+                <option value="amount">Hoogste bedrag</option>
+              </select>
+              <select
+                value={ordersStatusFilter}
+                onChange={(e) => setOrdersStatusFilter(e.target.value)}
+                className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+              >
+                <option value="all">Alle afhandeling</option>
+                <option value="unfulfilled">Niet vervuld</option>
+                <option value="fulfilled">Vervuld</option>
+                <option value="partial">Gedeeltelijk</option>
+              </select>
+            </div>
 
-              {selectedOrder && !orderDetailLoading && (
-                <div className="space-y-4 text-sm">
+            {ordersError && <p className="mt-3 text-sm text-red-400">{ordersError}</p>}
+
+            <div className="mt-4 space-y-3">
+              {filteredOrders.length > 0 ? (
+                filteredOrders.map((order) => {
+                  const isActive = selectedOrder?.id === order.id;
+                  return (
+                    <button
+                      key={order.id}
+                      className={`flex w-full items-start justify-between gap-4 rounded-[1.5rem] border p-4 text-left transition ${
+                        isActive ? "border-accent/35 bg-accent/5" : "border-border bg-card/20 hover:bg-card/35"
+                      }`}
+                      onClick={() => openOrderDetail(order.id)}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium">{order.name}</p>
+                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${getFulfillmentTone(order.fulfillment_status)}`}>
+                            {order.fulfillment_status || "niet vervuld"}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm opacity-70">{order.customer_name || order.email || "-"}</p>
+                        <p className="mt-1 text-xs opacity-55">Aangemaakt: {formatDateLabel(order.created_at)}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-semibold">{order.total_price} {order.currency}</p>
+                        <p className="mt-1 text-xs opacity-60">{order.financial_status || "-"}</p>
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="rounded-xl border border-dashed border-border p-4 text-center text-sm opacity-60">
+                  Nog geen Shopify bestellingen of Shopify is niet geconfigureerd.
+                </div>
+              )}
+            </div>
+            <p className="mt-2 text-xs opacity-60">Klik op een bestelling om rechts details en Gelato-status te openen.</p>
+          </section>
+
+          <aside className="glass rounded-[2rem] p-5 sm:p-6 xl:sticky xl:top-[96px] xl:h-fit">
+            <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-5">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-45">Detailkaart</p>
+                <h3 className="mt-2 text-lg font-semibold">Orderafhandeling</h3>
+                <p className="mt-1 text-sm opacity-60">Shopify-detail, events en Gelato-opvolging blijven vast naast de orderlijst.</p>
+              </div>
+              {(selectedOrder || orderDetailError) && (
+                <button onClick={closeOrderDetail} className="rounded-xl border border-border px-3 py-2 text-sm transition hover:bg-card/60">
+                  Sluiten
+                </button>
+              )}
+            </div>
+
+            {orderDetailLoading && <p className="mt-5 text-sm opacity-70">Besteldetails laden...</p>}
+            {!orderDetailLoading && orderDetailError && <p className="mt-5 text-sm text-red-400">{orderDetailError}</p>}
+
+            {!orderDetailLoading && !orderDetailError && !selectedOrder && (
+              <div className="mt-5 rounded-[1.5rem] border border-dashed border-border bg-card/25 p-6 text-center">
+                <p className="text-sm font-medium">Selecteer een bestelling</p>
+                <p className="mt-2 text-sm opacity-65">De detailkaart toont hier direct klantinfo, orderlijnen, Shopify-events en Gelato-status.</p>
+              </div>
+            )}
+
+            {sendGelatoStatus && <p className="mt-4 text-sm text-green-400">{sendGelatoStatus}</p>}
+
+            {selectedOrder && !orderDetailLoading && (
+              <div className="mt-5 space-y-4 text-sm">
+                <div className="rounded-[1.5rem] border border-border bg-card/25 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-base font-semibold">{selectedOrder.name}</p>
+                      <p className="mt-1 text-xs opacity-60">{selectedOrder.customer_name || selectedOrder.email || "-"}</p>
+                    </div>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${getFulfillmentTone(selectedOrder.fulfillment_status)}`}>
+                      {selectedOrder.fulfillment_status || "niet vervuld"}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                    <div className="rounded-xl border border-border/70 bg-card/35 p-3">
+                      <p className="text-[11px] uppercase tracking-[0.16em] opacity-45">Totaal</p>
+                      <p className="mt-1 text-sm font-medium">{selectedOrder.total_price} {selectedOrder.currency}</p>
+                    </div>
+                    <div className="rounded-xl border border-border/70 bg-card/35 p-3">
+                      <p className="text-[11px] uppercase tracking-[0.16em] opacity-45">Aangemaakt</p>
+                      <p className="mt-1 text-sm font-medium">{formatDateLabel(selectedOrder.created_at)}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      onClick={sendOrderToGelato}
+                      disabled={sendToGelatoDisabled}
+                      className="rounded-xl bg-accent px-3 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                    >
+                      {sendGelatoBusy ? "Verzenden..." : hasGelatoOrder ? "Reeds in Gelato" : "Stuur naar Gelato"}
+                    </button>
+                    <Link href="/shopify" className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm transition hover:bg-card/60">
+                      Open commerce cockpit
+                      <ArrowUpRight className="h-4 w-4" />
+                    </Link>
+                  </div>
+                </div>
+
                   <div className="grid gap-3 md:grid-cols-4">
                     <div className="rounded-xl border border-border bg-card/40 p-3">
                       <p className="text-xs opacity-60">Bestelling</p>
@@ -605,9 +720,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="rounded-xl border border-border bg-card/40 p-3">
                       <p className="text-xs opacity-60">Aangemaakt</p>
-                      <p className="mt-1 font-medium">
-                        {selectedOrder.created_at ? new Date(selectedOrder.created_at).toLocaleString() : "-"}
-                      </p>
+                      <p className="mt-1 font-medium">{formatDateLabel(selectedOrder.created_at)}</p>
                     </div>
                     <div className="rounded-xl border border-border bg-card/40 p-3">
                       <p className="text-xs opacity-60">Status</p>
@@ -723,7 +836,7 @@ export default function DashboardPage() {
                           <li key={event.id} className="rounded-lg border border-border/70 bg-card/30 p-3">
                             <div className="flex items-center justify-between gap-3">
                               <p className="text-xs font-medium uppercase opacity-65">{event.type}</p>
-                              <p className="text-xs opacity-55">{event.created_at ? new Date(event.created_at).toLocaleString() : "-"}</p>
+                              <p className="text-xs opacity-55">{formatDateLabel(event.created_at)}</p>
                             </div>
                             <p className="mt-1 text-sm font-medium">{event.author}</p>
                             <p className="mt-1 text-sm opacity-80">{event.message}</p>
@@ -809,9 +922,7 @@ export default function DashboardPage() {
                           </div>
                           <div className="rounded-xl border border-border bg-card/30 p-3">
                             <p className="text-xs opacity-60">ETA</p>
-                            <p className="mt-1 font-medium">
-                              {gelatoStatus.eta ? new Date(gelatoStatus.eta).toLocaleString() : "-"}
-                            </p>
+                            <p className="mt-1 font-medium">{formatDateLabel(gelatoStatus.eta)}</p>
                           </div>
                         </div>
 
@@ -864,11 +975,10 @@ export default function DashboardPage() {
                       <p className="mt-1 font-medium">{selectedOrder.note}</p>
                     </div>
                   )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+              </div>
+            )}
+          </aside>
+        </div>
       </div>
     </LayoutShell>
   );

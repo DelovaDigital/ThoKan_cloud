@@ -196,6 +196,57 @@ def _imap_client(config: dict):
     return client
 
 
+def _fetch_latest_inbox_messages(config: dict, limit: int = 10) -> list[dict[str, str]]:
+    normalized_limit = min(max(1, limit), 20)
+    client = _imap_client(config)
+    try:
+        client.select("INBOX")
+        status_code, data = client.uid("search", None, "ALL")
+        if status_code != "OK":
+            raise RuntimeError("Unable to fetch messages")
+
+        uids = data[0].split()
+        selected_uids = uids[-normalized_limit:]
+
+        messages: list[dict[str, str]] = []
+        for message_uid in reversed(selected_uids):
+            fetch_status, message_data = client.uid(
+                "fetch",
+                message_uid,
+                "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])",
+            )
+            if fetch_status != "OK" or not message_data:
+                continue
+
+            raw_message = next(
+                (
+                    item[1]
+                    for item in message_data
+                    if isinstance(item, tuple) and len(item) > 1 and isinstance(item[1], (bytes, bytearray))
+                ),
+                None,
+            )
+            if not raw_message:
+                continue
+
+            parsed = email.message_from_bytes(raw_message)
+            messages.append(
+                {
+                    "id": message_uid.decode("utf-8", errors="ignore"),
+                    "from": _decode_mime(parsed.get("From")),
+                    "subject": _decode_mime(parsed.get("Subject")),
+                    "date": parsed.get("Date", ""),
+                }
+            )
+
+        return messages
+    finally:
+        try:
+            client.logout()
+        except Exception:
+            pass
+
+
 def _extract_email_address(value: str | None) -> str:
     return parseaddr(value or "")[1]
 
@@ -408,7 +459,7 @@ def get_inbox(limit: int = 50, skip: int = 0, current_user: User = Depends(get_c
     try:
         client = _imap_client(raw)
         client.select("INBOX")
-        status_code, data = client.search(None, "ALL")
+        status_code, data = client.uid("search", None, "ALL")
         if status_code != "OK":
             raise RuntimeError("Unable to fetch messages")
 
@@ -420,10 +471,23 @@ def get_inbox(limit: int = 50, skip: int = 0, current_user: User = Depends(get_c
         
         messages = []
         for message_id in reversed(selected_ids):
-            fetch_status, message_data = client.fetch(message_id, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])")
+            fetch_status, message_data = client.uid(
+                "fetch",
+                message_id,
+                "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])",
+            )
             if fetch_status != "OK" or not message_data:
                 continue
-            raw_message = message_data[0][1]
+            raw_message = next(
+                (
+                    item[1]
+                    for item in message_data
+                    if isinstance(item, tuple) and len(item) > 1 and isinstance(item[1], (bytes, bytearray))
+                ),
+                None,
+            )
+            if not raw_message:
+                continue
             parsed = email.message_from_bytes(raw_message)
             messages.append(
                 {
@@ -509,13 +573,23 @@ def get_message(message_id: str, folder: str = "INBOX", current_user: User = Dep
             sel_status, _ = client.select(f'"{folder}"')
             if sel_status != "OK":
                 client.select(folder)
+            fetch_status, message_data = client.fetch(message_id.encode(), "(RFC822)")
         else:
             client.select("INBOX")
-        fetch_status, message_data = client.fetch(message_id.encode(), "(RFC822)")
+            fetch_status, message_data = client.uid("fetch", message_id, "(RFC822)")
         if fetch_status != "OK" or not message_data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
 
-        raw_message = message_data[0][1]
+        raw_message = next(
+            (
+                item[1]
+                for item in message_data
+                if isinstance(item, tuple) and len(item) > 1 and isinstance(item[1], (bytes, bytearray))
+            ),
+            None,
+        )
+        if not raw_message:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
         parsed = email.message_from_bytes(raw_message)
 
         # Extract full body (text and html)
@@ -677,6 +751,7 @@ def delete_message(message_id: str, folder: str = "INBOX", current_user: User = 
 
     try:
         client = _imap_client(raw)
+        use_uid = not folder or folder.upper() == "INBOX"
         if folder and folder.upper() != "INBOX":
             sel_status, _ = client.select(f'"{folder}"')
             if sel_status != "OK":
@@ -684,7 +759,10 @@ def delete_message(message_id: str, folder: str = "INBOX", current_user: User = 
         else:
             client.select("INBOX")
 
-        fetch_status, message_data = client.fetch(message_id.encode(), "(RFC822)")
+        if use_uid:
+            fetch_status, message_data = client.uid("fetch", message_id, "(RFC822)")
+        else:
+            fetch_status, message_data = client.fetch(message_id.encode(), "(RFC822)")
         if fetch_status != "OK" or not message_data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
 
@@ -692,23 +770,37 @@ def delete_message(message_id: str, folder: str = "INBOX", current_user: User = 
         trash_folder = _find_trash_folder(client)
         if trash_folder:
             try:
-                copy_status, _ = client.copy(message_id.encode(), trash_folder)
+                if use_uid:
+                    copy_status, _ = client.uid("copy", message_id, trash_folder)
+                else:
+                    copy_status, _ = client.copy(message_id.encode(), trash_folder)
                 if copy_status == "OK":
                     # Successfully copied to trash, now delete from inbox
-                    client.store(message_id.encode(), "+FLAGS", "(\\Seen)")
-                    try:
-                        client.store(message_id.encode(), "+FLAGS", "(\\Deleted)")
-                        client.expunge()
-                    except Exception:
-                        pass  # If flag/expunge fails, message is already in trash
+                    if use_uid:
+                        client.uid("store", message_id, "+FLAGS", "(\\Seen)")
+                        try:
+                            client.uid("store", message_id, "+FLAGS", "(\\Deleted)")
+                            client.expunge()
+                        except Exception:
+                            pass
+                    else:
+                        client.store(message_id.encode(), "+FLAGS", "(\\Seen)")
+                        try:
+                            client.store(message_id.encode(), "+FLAGS", "(\\Deleted)")
+                            client.expunge()
+                        except Exception:
+                            pass
                     client.logout()
                     return {"message": "Email deleted"}
             except Exception:
-                pass  # Fall through to alternative deletion methods
+                pass
 
         # Fallback: Try direct deletion with \Deleted flag
         try:
-            store_status, _ = client.store(message_id.encode(), "+FLAGS", "(\\Deleted)")
+            if use_uid:
+                store_status, _ = client.uid("store", message_id, "+FLAGS", "(\\Deleted)")
+            else:
+                store_status, _ = client.store(message_id.encode(), "+FLAGS", "(\\Deleted)")
             if store_status == "OK":
                 expunge_status, _ = client.expunge()
                 if expunge_status == "OK":

@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Bell, BellRing, MessageSquareText, RefreshCw, ShoppingBag, UserRound } from "lucide-react";
+import { ArrowUpRight, Bell, BellRing, FileText, MessageSquareText, PackageCheck, RefreshCw, ShoppingBag, Star, UserRound } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { api } from "@/lib/api";
 import {
@@ -82,6 +83,13 @@ function formatWebsiteChatNotificationTitle(conversation: WebsiteChatConversatio
   }
   return "Nieuwe websitechat";
 }
+
+type CommerceModule = {
+  title: string;
+  status: string;
+  description: string;
+  href?: string;
+};
 
 export default function ShopifyPage() {
   const [events, setEvents] = useState<ShopifyEvent[]>([]);
@@ -310,6 +318,33 @@ export default function ShopifyPage() {
     });
   }, [chatConversations, chatSearch]);
 
+  const commerceModules = useMemo<CommerceModule[]>(() => {
+    return [
+      {
+        title: "Website chat",
+        status: unreadMessages > 0 ? `${unreadMessages} nieuw` : "Live bridge",
+        description: "Centrale inbox voor webshopchat die via de ThoKan bridge binnenkomt en direct met ordercontext combineert.",
+      },
+      {
+        title: "Shopify signalen",
+        status: `${events.length} events`,
+        description: "Orderevents, klantstatus en storefront activiteit blijven in dezelfde cockpit als chat en fulfilment.",
+      },
+      {
+        title: "Gelato fulfilment",
+        status: "Klaar via dashboard",
+        description: "Gebruik de orderdetail- en Gelato-routes in dashboard en instellingen om productmapping en fulfilmentflow te beheren.",
+        href: "/dashboard",
+      },
+      {
+        title: "Reviews en forms",
+        status: "Integratiebasis",
+        description: "De UX-laag is voorbereid om ook reviews, formulieren en extra storefront events in deze commerce workspace te laten landen zodra de webhook/API routes zijn toegevoegd.",
+        href: "/settings",
+      },
+    ];
+  }, [events.length, unreadMessages]);
+
   return (
     <LayoutShell>
       <div className="space-y-5">
@@ -318,11 +353,11 @@ export default function ShopifyPage() {
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/40 px-3 py-1 text-xs font-medium opacity-80">
                 <MessageSquareText className="h-3.5 w-3.5 text-accent" />
-                Shopify werkruimte
+                Commerce cockpit
               </div>
-              <h1 className="mt-4 text-3xl font-semibold sm:text-4xl">Websitechats en Shopify activiteit</h1>
+              <h1 className="mt-4 text-3xl font-semibold sm:text-4xl">Shopify, chat en fulfilment in één cockpit</h1>
               <p className="mt-3 max-w-3xl text-sm opacity-70 sm:text-base">
-                Deze pagina combineert websitechats die via de ThoKan bridge binnenkomen met de bestaande Shopify order-eventfeed. Shopify Inbox-conversaties zijn niet rechtstreeks beschikbaar via de huidige Admin API-route, dus websitechat loopt hier via de bridge en orderactiviteit via de eventfeed.
+                Deze workspace bundelt websitechat, storefront signalen en fulfilmentcontext in één plek. Shopify Inbox zelf is nog niet rechtstreeks beschikbaar via de huidige Admin API-route, dus websitechat loopt via de bridge en orderactiviteit via de bestaande eventfeed.
               </p>
               <div className="mt-5 flex flex-wrap gap-3">
                 <button
@@ -365,6 +400,66 @@ export default function ShopifyPage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Orders</p>
                 <p className="mt-2 text-2xl font-semibold">{ordersChecked}</p>
                 <p className="mt-1 text-sm opacity-60">Bestellingen gecontroleerd</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="glass rounded-[2rem] p-5 sm:p-6">
+          <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Commerce modules</h2>
+              <p className="mt-1 text-sm opacity-65">
+                Een bredere laag voor storefront operations: chat, orderobservatie, fulfilment en uitbreidbare modules zoals reviews en forms.
+              </p>
+            </div>
+            <div className="rounded-full bg-card/40 px-3 py-1 text-xs font-medium opacity-75">
+              UX afgestemd op snelle opvolging
+            </div>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+            {commerceModules.map((module) => (
+              <div key={module.title} className="rounded-[1.5rem] border border-border bg-card/25 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">{module.title}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.16em] opacity-45">{module.status}</p>
+                  </div>
+                  {module.title === "Website chat" ? (
+                    <MessageSquareText className="h-5 w-5 text-accent" />
+                  ) : module.title === "Shopify signalen" ? (
+                    <ShoppingBag className="h-5 w-5 text-accent" />
+                  ) : module.title === "Gelato fulfilment" ? (
+                    <PackageCheck className="h-5 w-5 text-accent" />
+                  ) : (
+                    <Star className="h-5 w-5 text-accent" />
+                  )}
+                </div>
+                <p className="mt-3 text-sm opacity-70">{module.description}</p>
+                {module.href && (
+                  <Link href={module.href} className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-accent hover:underline">
+                    Open module
+                    <ArrowUpRight className="h-4 w-4" />
+                  </Link>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 rounded-[1.5rem] border border-border/70 bg-card/25 p-4">
+            <div className="grid gap-3 lg:grid-cols-3">
+              <div className="rounded-xl border border-border/70 bg-card/35 p-4">
+                <p className="text-sm font-medium">Webshop chat</p>
+                <p className="mt-2 text-sm opacity-70">Actief via de website-chat bridge en zichtbaar als gedeelde inbox voor support en sales.</p>
+              </div>
+              <div className="rounded-xl border border-border/70 bg-card/35 p-4">
+                <p className="text-sm font-medium">Reviews</p>
+                <p className="mt-2 text-sm opacity-70">Nog geen backend route, maar deze cockpit is voorbereid om review events of moderation later naast chat te tonen.</p>
+              </div>
+              <div className="rounded-xl border border-border/70 bg-card/35 p-4">
+                <p className="text-sm font-medium">Forms</p>
+                <p className="mt-2 text-sm opacity-70">Form submissions kunnen later via dezelfde bridge/webhook aanpak binnenkomen zodat lead capture en supportvragen niet versnipperd raken.</p>
               </div>
             </div>
           </div>
@@ -517,6 +612,21 @@ export default function ShopifyPage() {
               Browsermeldingen zijn actief voor websitechats en Shopify events.
             </div>
           )}
+
+          <div className="mt-5 rounded-[1.5rem] border border-border/70 bg-card/25 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-medium">Volgende uitbreidingen in deze commerce workspace</p>
+                <p className="mt-1 text-sm opacity-65">
+                  Zodra de backend API’s toegevoegd zijn, kunnen reviews, embedded forms en extra storefront events hier zonder nieuw navigatiepatroon landen.
+                </p>
+              </div>
+              <Link href="/settings" className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm transition hover:bg-card/60">
+                <FileText className="h-4 w-4" />
+                Integraties beheren
+              </Link>
+            </div>
+          </div>
         </section>
 
         <section className="glass rounded-[2rem] p-5 sm:p-6">

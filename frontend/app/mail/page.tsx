@@ -1,6 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  Bell,
+  Inbox,
+  Mail,
+  MailPlus,
+  RefreshCw,
+  Reply,
+  Search,
+  Send,
+  Settings2,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { api } from "@/lib/api";
 import {
@@ -70,6 +84,13 @@ function ensureLinksOpenExternally(rawHtml: string): string {
     return rawHtml.replace(/<html([^>]*)>/i, `<html$1><head>${baseTag}</head>`);
   }
   return `<!doctype html><html><head>${baseTag}</head><body>${rawHtml}</body></html>`;
+}
+
+function formatDateLabel(value?: string): string {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
 }
 
 export default function MailPage() {
@@ -432,180 +453,245 @@ export default function MailPage() {
   const folderLabel = activeFolder === "inbox" ? "Inbox" : "Verzonden";
   const currentLoad = activeFolder === "inbox" ? loadingInbox : loadingSent;
   const visibleList = activeFolder === "inbox" ? visibleInbox : visibleSent;
+  const totalVisibleInFolder = activeFolder === "inbox" ? totalMessages : totalSent;
 
   return (
     <LayoutShell>
-      <div className="flex h-full min-h-0 flex-col gap-4">
-        {/* ── Sticky header ─────────────────────────────────────────── */}
-        <div className="glass sticky top-3 z-20 flex items-center justify-between rounded-2xl p-4 backdrop-blur">
-          <h2 className="text-xl font-semibold">Mailbox</h2>
-          <div className="flex gap-2">
-            {browserNotificationsSupported() && notificationPermission !== "granted" && (
-              <button
-                onClick={() => void enableNotifications()}
-                className="rounded-xl border border-border px-4 py-2 transition hover:bg-card/70"
-                title="Browsermeldingen inschakelen"
-              >
-                🔔
-              </button>
-            )}
-            <button
-              onClick={() => { setTo(""); setSubject(""); setBody(""); setShowCompose(true); }}
-              className="flex items-center gap-2 rounded-xl bg-accent/80 px-4 py-2 text-white transition hover:bg-accent"
-            >
-              <span>✉️</span>
-              <span className="hidden sm:inline">Nieuwe e-mail</span>
-            </button>
-            <button
-              onClick={refreshCurrentFolder}
-              className="rounded-xl border border-border px-4 py-2 transition hover:bg-card/70"
-            >
-              Verversen
-            </button>
-            <button
-              onClick={() => setShowSettings(true)}
-              className="rounded-xl border border-border px-4 py-2 transition hover:bg-card/70"
-              title="Mailboxinstellingen"
-            >
-              ⚙️
-            </button>
-          </div>
-        </div>
+      <div className="space-y-5">
+        <section className="glass overflow-hidden rounded-[2rem] p-5 sm:p-6">
+          <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/40 px-3 py-1 text-xs font-medium opacity-80">
+                <Sparkles className="h-3.5 w-3.5 text-accent" />
+                Mail workspace
+              </div>
+              <h1 className="mt-4 text-3xl font-semibold sm:text-4xl">Mailbox en opvolging</h1>
+              <p className="mt-3 max-w-3xl text-sm opacity-70 sm:text-base">
+                Eén vaste werkruimte voor inbox, verzonden berichten, mailboxconfiguratie en inline berichtdetail, zodat e-mail niet meer als een losse modalstroom aanvoelt.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                {browserNotificationsSupported() && notificationPermission !== "granted" && (
+                  <button
+                    onClick={() => void enableNotifications()}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-2.5 text-sm transition hover:bg-card/70"
+                    title="Browsermeldingen inschakelen"
+                  >
+                    <Bell className="h-4 w-4" />
+                    Meldingen activeren
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setTo("");
+                    setSubject("");
+                    setBody("");
+                    setShowCompose(true);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+                >
+                  <MailPlus className="h-4 w-4" />
+                  Nieuwe e-mail
+                </button>
+                <button
+                  onClick={refreshCurrentFolder}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-2.5 text-sm transition hover:bg-card/70"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Verversen
+                </button>
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-2.5 text-sm transition hover:bg-card/70"
+                >
+                  <Settings2 className="h-4 w-4" />
+                  Instellingen
+                </button>
+              </div>
+            </div>
 
-        {/* ── Status ────────────────────────────────────────────────── */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Actieve map</p>
+                <p className="mt-2 text-2xl font-semibold">{folderLabel}</p>
+                <p className="mt-1 text-sm opacity-60">Huidige mailboxfocus</p>
+              </div>
+              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Totaal in map</p>
+                <p className="mt-2 text-2xl font-semibold">{totalVisibleInFolder}</p>
+                <p className="mt-1 text-sm opacity-60">Inbox of verzonden volume</p>
+              </div>
+              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Na filters</p>
+                <p className="mt-2 text-2xl font-semibold">{visibleList.length}</p>
+                <p className="mt-1 text-sm opacity-60">Zichtbare berichten in lijst</p>
+              </div>
+              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Configuratie</p>
+                <p className="mt-2 text-2xl font-semibold">{config?.has_password ? "Actief" : "Setup"}</p>
+                <p className="mt-1 text-sm opacity-60">Mailboxverbinding en syncstatus</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {statusMsg && (
-          <div className="glass rounded-xl px-4 py-3 text-sm">
+          <div className="glass flex items-center justify-between gap-3 rounded-[1.5rem] px-4 py-3 text-sm">
             <span>{statusMsg}</span>
-            <button className="ml-3 opacity-50 hover:opacity-100" onClick={() => setStatusMsg("")}>✕</button>
+            <button className="rounded-lg border border-border p-1 opacity-60 transition hover:opacity-100" onClick={() => setStatusMsg("") }>
+              <X className="h-4 w-4" />
+            </button>
           </div>
         )}
 
         {browserNotificationsSupported() && notificationPermission === "granted" && (
-          <div className="glass rounded-xl px-4 py-3 text-sm opacity-75">
+          <div className="glass rounded-[1.5rem] px-4 py-3 text-sm opacity-75">
             Browsermeldingen zijn actief voor nieuwe e-mail.
           </div>
         )}
 
-        {/* ── Layout: sidebar + main ────────────────────────────────── */}
-        <div className="flex min-h-0 flex-1 gap-4">
-          {/* Sidebar */}
-          <aside className="glass flex w-44 shrink-0 flex-col gap-1 rounded-2xl p-3">
-            <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide opacity-50">Mappen</p>
+        <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)_380px]">
+          <aside className="glass flex h-fit flex-col gap-2 rounded-[2rem] p-4 xl:sticky xl:top-[96px]">
+            <p className="px-2 text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Mappen</p>
             <button
-              onClick={() => { setActiveFolder("inbox"); if (config?.has_password) loadInbox(); }}
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition ${
-                activeFolder === "inbox" ? "bg-accent/20 font-medium" : "hover:bg-card/60"
+              onClick={() => {
+                setActiveFolder("inbox");
+                if (config?.has_password) loadInbox();
+              }}
+              className={`flex items-center justify-between rounded-[1.25rem] px-3 py-3 text-sm transition ${
+                activeFolder === "inbox" ? "bg-accent/15 font-medium" : "hover:bg-card/60"
               }`}
             >
-              <span>📥 Inbox</span>
-              {totalMessages > 0 && (
-                <span className="rounded-full bg-accent/30 px-2 py-0.5 text-xs">{totalMessages}</span>
-              )}
+              <span className="inline-flex items-center gap-2">
+                <Inbox className="h-4 w-4" />
+                Inbox
+              </span>
+              {totalMessages > 0 && <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs">{totalMessages}</span>}
             </button>
             <button
-              onClick={() => { setActiveFolder("sent"); if (config?.has_password && sentMessages.length === 0) loadSent(); }}
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition ${
-                activeFolder === "sent" ? "bg-accent/20 font-medium" : "hover:bg-card/60"
+              onClick={() => {
+                setActiveFolder("sent");
+                if (config?.has_password && sentMessages.length === 0) loadSent();
+              }}
+              className={`flex items-center justify-between rounded-[1.25rem] px-3 py-3 text-sm transition ${
+                activeFolder === "sent" ? "bg-accent/15 font-medium" : "hover:bg-card/60"
               }`}
             >
-              <span>📤 Verzonden</span>
-              {totalSent > 0 && (
-                <span className="rounded-full bg-accent/30 px-2 py-0.5 text-xs">{totalSent}</span>
-              )}
+              <span className="inline-flex items-center gap-2">
+                <Send className="h-4 w-4" />
+                Verzonden
+              </span>
+              {totalSent > 0 && <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs">{totalSent}</span>}
             </button>
+
+            <div className="mt-3 rounded-[1.5rem] border border-border/70 bg-card/30 p-4 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Syncstatus</p>
+              <p className="mt-2 font-medium">{mailIsGlobal ? "Globale mailboxbasis" : "Accountgebonden mailbox"}</p>
+              <p className="mt-2 text-xs opacity-65">De mailmodule gebruikt dezelfde workspace-logica als settings en dashboard.</p>
+            </div>
           </aside>
 
-          {/* Main panel */}
-          <main className="glass flex min-h-0 flex-1 flex-col gap-4 rounded-2xl p-5">
-            {/* Stats row */}
-            <div className="grid grid-cols-3 gap-3 text-sm">
-              <div className="rounded-xl border border-border bg-card/30 p-3">
-                <p className="text-xs opacity-60">Op deze pagina</p>
-                <p className="mt-1 text-xl font-semibold">{visibleList.length}</p>
+          <main className="glass min-h-0 rounded-[2rem] p-5 sm:p-6">
+            <div className="flex flex-col gap-4 border-b border-border/60 pb-5 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">{folderLabel}</h2>
+                <p className="mt-1 text-sm opacity-65">Zoeken, sorteren en berichtselectie blijven vast in dezelfde mailboxlaag.</p>
               </div>
-              <div className="rounded-xl border border-border bg-card/30 p-3">
-                <p className="text-xs opacity-60">Totaal in {folderLabel}</p>
-                <p className="mt-1 text-xl font-semibold">
-                  {activeFolder === "inbox" ? totalMessages : totalSent}
-                </p>
-              </div>
-              <div className="rounded-xl border border-border bg-card/30 p-3">
-                <p className="text-xs opacity-60">Na filters</p>
-                <p className="mt-1 text-xl font-semibold">{visibleList.length}</p>
-              </div>
-            </div>
-
-            {/* Search / sort */}
-            {activeFolder === "inbox" ? (
-              <div className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
-                <input
-                  value={inboxSearch}
-                  onChange={(e) => setInboxSearch(e.target.value)}
-                  placeholder="Zoek afzender, onderwerp, snippet…"
-                  className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
-                />
-                <SortSelect value={inboxSort} onChange={setInboxSort} />
-                <label className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm">
-                  <input type="checkbox" checked={snippetOnly} onChange={(e) => setSnippetOnly(e.target.checked)} />
-                  Met snippet
-                </label>
-              </div>
-            ) : (
-              <div className="grid gap-2 md:grid-cols-[1fr_auto]">
-                <input
-                  value={sentSearch}
-                  onChange={(e) => setSentSearch(e.target.value)}
-                  placeholder="Zoek ontvanger, onderwerp…"
-                  className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
-                />
-                <SortSelect value={sentSort} onChange={setSentSort} isSent />
-              </div>
-            )}
-
-            {/* Pagination header */}
-            <div className="flex items-center justify-between">
-              <h3 className="font-medium">{folderLabel}</h3>
               <div className="flex gap-2 text-xs">
                 <button
                   onClick={() => activeFolder === "inbox" ? setInboxPage((p) => Math.max(0, p - 1)) : setSentPage((p) => Math.max(0, p - 1))}
                   disabled={(activeFolder === "inbox" ? inboxPage : sentPage) === 0}
-                  className="rounded-lg border border-border px-3 py-1 disabled:opacity-50"
+                  className="rounded-xl border border-border px-3 py-2 transition disabled:opacity-50"
                 >
                   ← Vorige
                 </button>
-                <span className="px-2 py-1">Pagina {(activeFolder === "inbox" ? inboxPage : sentPage) + 1}</span>
+                <span className="rounded-xl border border-border px-3 py-2 opacity-70">Pagina {(activeFolder === "inbox" ? inboxPage : sentPage) + 1}</span>
                 <button
                   onClick={() => activeFolder === "inbox" ? setInboxPage((p) => p + 1) : setSentPage((p) => p + 1)}
                   disabled={(activeFolder === "inbox" ? messages : sentMessages).length < 50}
-                  className="rounded-lg border border-border px-3 py-1 disabled:opacity-50"
+                  className="rounded-xl border border-border px-3 py-2 transition disabled:opacity-50"
                 >
                   Volgende →
                 </button>
               </div>
             </div>
 
-            {/* Message list */}
-            <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1" style={{ WebkitOverflowScrolling: "touch" }}>
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] opacity-45">Op deze pagina</p>
+                <p className="mt-2 text-2xl font-semibold">{visibleList.length}</p>
+              </div>
+              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] opacity-45">Mapvolume</p>
+                <p className="mt-2 text-2xl font-semibold">{totalVisibleInFolder}</p>
+              </div>
+              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] opacity-45">Previewstaat</p>
+                <p className="mt-2 text-2xl font-semibold">{selectedMessage ? "Open" : "Stand-by"}</p>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {activeFolder === "inbox" ? (
+                <div className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-45" />
+                    <input
+                      value={inboxSearch}
+                      onChange={(e) => setInboxSearch(e.target.value)}
+                      placeholder="Zoek afzender, onderwerp, snippet…"
+                      className="w-full rounded-xl border border-border bg-transparent py-2 pl-9 pr-3 text-sm"
+                    />
+                  </div>
+                  <SortSelect value={inboxSort} onChange={setInboxSort} />
+                  <label className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm">
+                    <input type="checkbox" checked={snippetOnly} onChange={(e) => setSnippetOnly(e.target.checked)} />
+                    Met snippet
+                  </label>
+                </div>
+              ) : (
+                <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-45" />
+                    <input
+                      value={sentSearch}
+                      onChange={(e) => setSentSearch(e.target.value)}
+                      placeholder="Zoek ontvanger, onderwerp…"
+                      className="w-full rounded-xl border border-border bg-transparent py-2 pl-9 pr-3 text-sm"
+                    />
+                  </div>
+                  <SortSelect value={sentSort} onChange={setSentSort} isSent />
+                </div>
+              )}
+            </div>
+
+            <ul className="mt-5 min-h-0 space-y-3" style={{ WebkitOverflowScrolling: "touch" }}>
               {visibleList.map((msg) => {
                 const folderParam = activeFolder === "inbox" ? "INBOX" : sentFolderName;
+                const isActive = selectedMessage?.id === msg.id;
                 return (
                   <li
                     key={msg.id}
-                    className="cursor-pointer rounded-xl border border-border p-3 transition hover:bg-accent/10"
+                    className={`cursor-pointer rounded-[1.5rem] border p-4 transition ${
+                      isActive ? "border-accent/35 bg-accent/5" : "border-border bg-card/20 hover:bg-card/35"
+                    }`}
                     onClick={() => openMessage(msg.id, folderParam)}
                   >
-                    <p className="truncate text-sm font-medium">{msg.subject || "(Geen onderwerp)"}</p>
-                    <p className="mt-1 text-xs opacity-60">
-                      {activeFolder === "inbox" ? `Van: ${msg.from}` : `Aan: ${msg.to}`}
-                    </p>
-                    <p className="mt-0.5 text-xs opacity-40">{msg.date}</p>
-                    {msg.snippet && <p className="mt-1 truncate text-xs opacity-50">{msg.snippet}</p>}
-                    <div className="mt-2 flex justify-end">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{msg.subject || "(Geen onderwerp)"}</p>
+                        <p className="mt-1 text-xs opacity-60">{activeFolder === "inbox" ? `Van: ${msg.from}` : `Aan: ${msg.to}`}</p>
+                        <p className="mt-1 text-[11px] opacity-45">{formatDateLabel(msg.date)}</p>
+                        {msg.snippet && <p className="mt-2 truncate text-xs opacity-55">{msg.snippet}</p>}
+                      </div>
                       <button
-                        className="rounded-lg border border-border px-3 py-1 text-xs transition hover:bg-red-500/20"
-                        onClick={(e) => { e.stopPropagation(); deleteMessage(msg.id, folderParam); }}
+                        className="rounded-xl border border-border p-2 text-xs transition hover:bg-red-500/20"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteMessage(msg.id, folderParam);
+                        }}
+                        aria-label="Bericht verwijderen"
                       >
-                        Verwijderen
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   </li>
@@ -623,6 +709,91 @@ export default function MailPage() {
               )}
             </ul>
           </main>
+
+          <aside className="glass rounded-[2rem] p-5 sm:p-6 xl:sticky xl:top-[96px] xl:h-fit">
+            <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-5">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-45">Detailkaart</p>
+                <h2 className="mt-2 text-lg font-semibold">Berichtdetail</h2>
+                <p className="mt-1 text-sm opacity-60">Afzender, inhoud en antwoord blijven vast zichtbaar naast de lijst.</p>
+              </div>
+              {selectedMessage && (
+                <button className="rounded-xl border border-border p-2 transition hover:bg-card/60" onClick={closeMessage} aria-label="Bericht sluiten">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {loadingDetail && <p className="mt-5 text-sm opacity-70">Bericht laden…</p>}
+
+            {!loadingDetail && !selectedMessage && (
+              <div className="mt-5 rounded-[1.5rem] border border-dashed border-border bg-card/25 p-6 text-center">
+                <p className="text-sm font-medium">Selecteer een bericht</p>
+                <p className="mt-2 text-sm opacity-65">De detailkaart toont hier onderwerp, afzender, inhoud en antwoordactie zonder een aparte modal te openen.</p>
+              </div>
+            )}
+
+            {selectedMessage && !loadingDetail && (
+              <div className="mt-5 space-y-4">
+                <div className="rounded-[1.5rem] border border-border bg-card/25 p-4">
+                  <p className="text-base font-semibold">{selectedMessage.subject || "(Geen onderwerp)"}</p>
+                  <p className="mt-2 text-xs opacity-65">Van: {selectedMessage.from}</p>
+                  <p className="mt-1 text-xs opacity-65">Aan: {selectedMessage.to}</p>
+                  <p className="mt-1 text-[11px] opacity-45">{formatDateLabel(selectedMessage.date)}</p>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {activeFolder === "inbox" && (
+                      <button className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm transition hover:bg-card/60" onClick={() => setShowReply(!showReply)}>
+                        <Reply className="h-4 w-4" />
+                        Antwoorden
+                      </button>
+                    )}
+                    <button className="inline-flex items-center gap-2 rounded-xl border border-red-500/40 px-3 py-2 text-sm text-red-300 transition hover:bg-red-500/15" onClick={() => deleteMessage(selectedMessage.id, openedFromFolder)}>
+                      <Trash2 className="h-4 w-4" />
+                      Verwijderen
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-hidden rounded-[1.5rem] border border-border bg-white dark:bg-gray-900">
+                  {emailHtmlUrl ? (
+                    <iframe
+                      src={emailHtmlUrl}
+                      className="h-[420px] w-full border-0"
+                      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
+                      scrolling="yes"
+                      title="E-mailinhoud"
+                    />
+                  ) : selectedMessage.text_body ? (
+                    <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap p-4 font-sans text-sm" style={{ WebkitOverflowScrolling: "touch" }}>{selectedMessage.text_body}</pre>
+                  ) : (
+                    <p className="p-4 text-sm opacity-60">Geen inhoud</p>
+                  )}
+                </div>
+
+                {showReply && (
+                  <div className="rounded-[1.5rem] border border-border bg-card/25 p-4">
+                    <h4 className="mb-3 font-medium">Antwoorden aan {selectedMessage.from}</h4>
+                    <textarea
+                      className="h-40 w-full rounded-xl border border-border bg-transparent px-3 py-2"
+                      placeholder="Typ je antwoord…"
+                      value={replyBody}
+                      onChange={(e) => setReplyBody(e.target.value)}
+                    />
+                    <div className="mt-3 flex gap-2">
+                      <button className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90" onClick={replyMail}>
+                        <Reply className="h-4 w-4" />
+                        Antwoord verzenden
+                      </button>
+                      <button className="rounded-xl border border-border px-4 py-2 text-sm transition hover:bg-card/70" onClick={() => { setShowReply(false); setReplyBody(""); }}>
+                        Annuleren
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </aside>
         </div>
 
         {/* ── Compose modal ─────────────────────────────────────────── */}
@@ -738,82 +909,6 @@ export default function MailPage() {
           </div>
         )}
 
-        {/* ── Message detail modal ──────────────────────────────────── */}
-        {selectedMessage && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
-            onClick={closeMessage}
-          >
-            <div
-              className="glass max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl p-6 shadow-xl"
-              style={{ WebkitOverflowScrolling: "touch" }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="mb-4 flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <h2 className="truncate text-2xl font-bold">{selectedMessage.subject || "(Geen onderwerp)"}</h2>
-                  <p className="mt-2 text-sm opacity-70">Van: <span className="font-medium">{selectedMessage.from}</span></p>
-                  <p className="text-sm opacity-70">Aan: <span className="font-medium">{selectedMessage.to}</span></p>
-                  <p className="mt-1 text-xs opacity-50">{selectedMessage.date}</p>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  {activeFolder === "inbox" && (
-                    <button className="rounded-xl border border-border bg-card px-4 py-2 text-sm hover:bg-accent/20" onClick={() => setShowReply(!showReply)}>
-                      Antwoorden
-                    </button>
-                  )}
-                  <button className="rounded-xl border border-border bg-card px-4 py-2 text-sm hover:bg-red-500/20" onClick={() => deleteMessage(selectedMessage.id, openedFromFolder)}>
-                    Verwijderen
-                  </button>
-                  <button className="rounded-xl border border-border bg-card px-4 py-2 text-sm hover:bg-accent/10" onClick={closeMessage}>
-                    Sluiten
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-4 overflow-hidden rounded-xl border border-border bg-white dark:bg-gray-900">
-                {emailHtmlUrl ? (
-                  <iframe
-                    src={emailHtmlUrl}
-                    className="h-[70vh] min-h-[360px] w-full border-0"
-                    sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
-                    scrolling="yes"
-                    title="E-mailinhoud"
-                  />
-                ) : selectedMessage.text_body ? (
-                  <pre className="max-h-[70vh] overflow-auto whitespace-pre-wrap p-4 font-sans text-sm" style={{ WebkitOverflowScrolling: "touch" }}>{selectedMessage.text_body}</pre>
-                ) : (
-                  <p className="p-4 text-sm opacity-60">Geen inhoud</p>
-                )}
-              </div>
-
-              {showReply && (
-                <div className="mt-6 border-t border-border pt-5">
-                  <h4 className="mb-3 font-medium">Antwoorden aan {selectedMessage.from}</h4>
-                  <textarea
-                    className="h-40 w-full rounded-xl border border-border bg-transparent px-3 py-2"
-                    placeholder="Typ je antwoord…"
-                    value={replyBody}
-                    onChange={(e) => setReplyBody(e.target.value)}
-                  />
-                  <div className="mt-3 flex gap-2">
-                    <button className="rounded-xl bg-accent/80 px-6 py-2 text-white hover:bg-accent" onClick={replyMail}>Antwoord verzenden</button>
-                    <button className="rounded-xl border border-border px-4 py-2 hover:bg-card/70" onClick={() => { setShowReply(false); setReplyBody(""); }}>Annuleren</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── Loading spinner ───────────────────────────────────────── */}
-        {loadingDetail && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="glass rounded-2xl p-6">
-              <p className="text-sm">Bericht laden…</p>
-            </div>
-          </div>
-        )}
       </div>
     </LayoutShell>
   );

@@ -30,7 +30,7 @@ async function redirectToLoginWithNotice(message: string, type: "success" | "war
     }
   }
 
-  window.location.replace("/");
+  window.location.replace("/login");
 }
 
 export default function RestartingPage() {

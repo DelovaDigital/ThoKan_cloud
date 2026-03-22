@@ -7,6 +7,7 @@ import {
   Boxes,
   Cog,
   HardDrive,
+  Link2,
   Mail,
   PackageCheck,
   RefreshCw,
@@ -14,6 +15,7 @@ import {
   ShoppingBag,
   Sparkles,
   Store,
+  Users,
   WandSparkles,
   X,
 } from "lucide-react";
@@ -128,6 +130,14 @@ type GelatoConfig = {
 type CurrentUser = {
   id: string;
   roles: string[];
+};
+
+type SyncModuleCard = {
+  key: string;
+  title: string;
+  scope: string;
+  status: string;
+  detail: string;
 };
 
 type MailConfig = {
@@ -264,6 +274,7 @@ export default function SettingsPage() {
   const [mailBusy, setMailBusy] = useState(false);
   const [mailTestBusy, setMailTestBusy] = useState(false);
   const [canConfigureGlobal, setCanConfigureGlobal] = useState(false);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [sectionFilter, setSectionFilter] = useState<"info" | "storage" | "mail" | "api">("info");
 
   function formatNightlyWindow(hour: number) {
@@ -338,8 +349,10 @@ export default function SettingsPage() {
   async function loadCurrentUser() {
     try {
       const me = await api<CurrentUser>("/auth/me");
+      setCurrentUser(me);
       setCanConfigureGlobal(Boolean(me.roles?.includes("admin")));
     } catch {
+      setCurrentUser(null);
       setCanConfigureGlobal(false);
     }
   }
@@ -860,6 +873,47 @@ export default function SettingsPage() {
     });
   }, [packages, updateChannel]);
 
+  const syncModules = useMemo<SyncModuleCard[]>(() => {
+    return [
+      {
+        key: "mail",
+        title: "Mail",
+        scope: mailConfig?.is_global ? "Globaal" : "Per account",
+        status: mailConfig?.has_password ? "Actief" : "Onvolledig",
+        detail: mailConfig?.is_global
+          ? "Nieuwe en bestaande accounts kunnen dezelfde mailboxbasis gebruiken zolang ze geen eigen override opslaan."
+          : "Mail draait nu account-specifiek; sync voor alle accounts kan via de globale toggle.",
+      },
+      {
+        key: "shopify",
+        title: "Shopify",
+        scope: shopifyIsGlobal ? "Globaal" : "Per account",
+        status: shopifyHasToken ? "Verbonden" : "Token vereist",
+        detail: shopifyIsGlobal
+          ? "Shopify shop, token en capabilities worden nu als gedeelde basis gebruikt voor accounts zonder eigen koppeling."
+          : "Shopify staat nog per account; activeer ‘voor alle accounts’ om storefront data te synchroniseren.",
+      },
+      {
+        key: "gelato",
+        title: "Gelato",
+        scope: gelatoIsGlobal ? "Globaal" : "Per account",
+        status: gelatoHasKey ? "Verbonden" : "API sleutel vereist",
+        detail: gelatoIsGlobal
+          ? "SKU-mapping en fulfilment-flow worden gedeeld zodat orderafhandeling niet per account opnieuw hoeft."
+          : "Gelato werkt nog per account; globale SKU-sync is beschikbaar via de bestaande toggle.",
+      },
+      {
+        key: "bridge",
+        title: "Website chat bridge",
+        scope: "Workspace",
+        status: shopifyWebsiteChatEnabled ? "Ingeschakeld" : "Uitgeschakeld",
+        detail: shopifyWebsiteChatEnabled
+          ? "Websiteberichten landen centraal in Cloud en kunnen door meerdere accounts vanuit dezelfde commerce workspace worden opgevolgd."
+          : "Schakel de bridge in om webshopchat als gedeelde inboxlaag te gebruiken.",
+      },
+    ];
+  }, [mailConfig?.is_global, mailConfig?.has_password, shopifyIsGlobal, shopifyHasToken, gelatoIsGlobal, gelatoHasKey, shopifyWebsiteChatEnabled]);
+
   useEffect(() => {
     if (!updateConfig?.auto_check_updates) return;
     let cancelled = false;
@@ -980,6 +1034,53 @@ export default function SettingsPage() {
             <div className="rounded-xl border border-border bg-card/30 p-3">
               <span className="text-xs font-medium opacity-70">Python-versie</span>
               <p className="mt-1 font-mono text-sm">{info?.python_version || "-"}</p>
+            </div>
+          </div>
+        </SectionShell>
+        )}
+
+        {shouldShowSection("info") && (
+        <SectionShell
+          icon={<Users className="h-5 w-5" />}
+          eyebrow="Sync"
+          title="Account sync en workspace-erfenis"
+          description="Globale integraties vormen hier de gedeelde basislaag voor accounts. Zo zie je in één oogopslag wat al gesynchroniseerd is en waar nog losse accountconfiguraties bestaan."
+          aside={
+            <div className="rounded-2xl border border-border/70 bg-card/40 px-4 py-3 text-right">
+              <p className="text-xs uppercase tracking-[0.18em] opacity-45">Rol</p>
+              <p className="mt-1 text-lg font-semibold">{currentUser?.roles?.includes("admin") ? "Admin" : "Gebruiker"}</p>
+            </div>
+          }
+        >
+          <div className="grid gap-3 xl:grid-cols-2">
+            {syncModules.map((module) => (
+              <div key={module.key} className="rounded-[1.5rem] border border-border bg-card/30 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">{module.title}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.16em] opacity-45">{module.scope}</p>
+                  </div>
+                  <div className={`rounded-full px-3 py-1 text-xs font-medium ${module.status === "Actief" || module.status === "Verbonden" || module.status === "Ingeschakeld" ? "bg-green-500/15 text-green-600 dark:text-green-300" : "bg-card/40"}`}>
+                    {module.status}
+                  </div>
+                </div>
+                <p className="mt-3 text-sm opacity-70">{module.detail}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 rounded-[1.5rem] border border-border/70 bg-card/25 p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-medium">Hoe sync nu werkt</p>
+                <p className="mt-1 text-sm opacity-65">
+                  In de huidige architectuur worden Shopify, Gelato en Mail account-overstijgend gesynchroniseerd via globale configuraties. Dat geeft een veilige gedeelde basis zonder het bestaande owner-model in bestanden en data te breken.
+                </p>
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs opacity-70">
+                <Link2 className="h-3.5 w-3.5" />
+                Sync foundation actief
+              </div>
             </div>
           </div>
         </SectionShell>

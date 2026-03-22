@@ -22,6 +22,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isNative = Capacitor.isNativePlatform();
   const [authChecked, setAuthChecked] = useState(false);
+  const [currentUserName, setCurrentUserName] = useState("Workspace");
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const latestIncomingByUserRef = useRef<Record<string, string>>({});
   const currentUserIdRef = useRef("");
@@ -53,9 +54,37 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       const authenticated = await ensureSession();
       if (cancelled) return;
       if (!authenticated) {
-        window.location.replace("/");
+        window.location.replace("/login");
         return;
       }
+
+      try {
+        let token: string | null = null;
+        try {
+          token = localStorage.getItem("access_token");
+        } catch {
+          token = null;
+        }
+
+        if (token) {
+          const response = await fetch(`${getApiBase()}/auth/me`, {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+            credentials: "include",
+            cache: "no-store",
+          });
+          if (response.ok) {
+            const me = (await response.json()) as { full_name?: string; id?: string };
+            if (!cancelled) {
+              setCurrentUserName(me.full_name || "Workspace");
+              currentUserIdRef.current = me.id || currentUserIdRef.current;
+            }
+          }
+        }
+      } catch {
+        // Ignore best-effort profile fetch errors.
+      }
+
       setAuthChecked(true);
     }
 
@@ -192,7 +221,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     } catch {
       // Ignore storage errors.
     }
-    window.location.replace("/");
+    window.location.replace("/login");
   }
 
   if (!authChecked) {
@@ -245,28 +274,43 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-bg">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.14),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(14,165,233,0.1),_transparent_26%)]" />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.14),_transparent_24%),radial-gradient(circle_at_18%_22%,_rgba(14,165,233,0.14),_transparent_18%),radial-gradient(circle_at_bottom_right,_rgba(249,115,22,0.1),_transparent_24%)]" />
+      <div className="pointer-events-none fixed inset-0 opacity-[0.08] [background-image:linear-gradient(rgba(148,163,184,0.35)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.35)_1px,transparent_1px)] [background-size:24px_24px]" />
       <div className="relative mx-auto grid max-w-7xl grid-cols-12 gap-4 p-4 lg:gap-5 lg:p-5">
         <aside className="glass col-span-12 rounded-[2rem] p-4 lg:sticky lg:top-4 lg:col-span-3 lg:p-5">
           <div className="flex h-full min-h-0 flex-col">
-            <div className="rounded-[1.75rem] border border-border/70 bg-card/50 p-4">
+            <div className="rounded-[1.75rem] border border-border/70 bg-[linear-gradient(145deg,rgba(255,255,255,0.52),rgba(255,255,255,0.22))] p-4 dark:bg-[linear-gradient(145deg,rgba(15,23,42,0.72),rgba(15,23,42,0.36))]">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgba(59,130,246,0.14)]">
                   <Sparkles className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] opacity-45">ThoKan</p>
-                  <h2 className="text-lg font-semibold">Cloud omgeving</h2>
+                  <h2 className="text-lg font-semibold">Control workspace</h2>
                 </div>
               </div>
-              <div className="mt-4 rounded-2xl border border-border/70 bg-card/40 p-3">
-                <p className="text-xs uppercase tracking-[0.2em] opacity-45">Huidige sectie</p>
-                <div className="mt-2 flex items-center justify-between">
-                  <div>
-                    <p className="text-base font-semibold">{activeItem.label}</p>
-                    <p className="text-xs opacity-55">Actieve werkruimte</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                <div className="rounded-2xl border border-border/70 bg-card/40 p-3">
+                  <p className="text-xs uppercase tracking-[0.2em] opacity-45">Actieve sectie</p>
+                  <div className="mt-2 flex items-center justify-between">
+                    <div>
+                      <p className="text-base font-semibold">{activeItem.label}</p>
+                      <p className="text-xs opacity-55">Actieve werkruimte</p>
+                    </div>
+                    <activeItem.icon className="h-5 w-5 text-accent" />
                   </div>
-                  <activeItem.icon className="h-5 w-5 text-accent" />
+                </div>
+                <div className="rounded-2xl border border-border/70 bg-card/35 p-3">
+                  <p className="text-xs uppercase tracking-[0.2em] opacity-45">Account context</p>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{currentUserName}</p>
+                      <p className="text-xs opacity-55">{isNative ? "Mobiele sessie" : "Websessie"}</p>
+                    </div>
+                    <div className="rounded-full bg-accent/15 px-2.5 py-1 text-[11px] font-medium text-accent">
+                      {chatUnreadCount > 0 ? `${chatUnreadCount} nieuw` : "Live"}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -317,20 +361,29 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
 
-            <div className="mt-4 hidden rounded-[1.75rem] border border-border/70 bg-card/35 p-4 text-sm opacity-65 lg:block">
-              Snelle toegang tot bestanden, e-mail, admin en updates vanuit één consistente omgeving.
+            <div className="mt-4 hidden rounded-[1.75rem] border border-border/70 bg-card/35 p-4 lg:block">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Workflow focus</p>
+              <p className="mt-2 text-sm opacity-70">
+                Bestanden, commerce, chat en beheer zitten nu in dezelfde vaste shell zodat context, acties en status niet meer per pagina wisselen.
+              </p>
             </div>
           </div>
         </aside>
         <main className="col-span-12 lg:col-span-9">
-          <div className="mb-4 rounded-[1.75rem] border border-border/60 bg-card/35 px-4 py-3 shadow-glass backdrop-blur sm:px-5">
-            <div className="flex items-center justify-between gap-3">
+          <div className="mb-4 rounded-[1.75rem] border border-border/60 bg-card/35 px-4 py-4 shadow-glass backdrop-blur sm:px-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] opacity-45">Werkruimte</p>
                 <h1 className="text-lg font-semibold">{activeItem.label}</h1>
+                <p className="mt-1 text-sm opacity-60">Eenzelfde shell voor acties, meldingen en instellingen over alle modules heen.</p>
               </div>
-              <div className="rounded-full bg-accent/15 px-3 py-1 text-xs font-medium text-accent">
-                Actief
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="rounded-full bg-card/55 px-3 py-1 text-xs font-medium opacity-75">
+                  {isNative ? "Native" : "Web"}
+                </div>
+                <div className="rounded-full bg-accent/15 px-3 py-1 text-xs font-medium text-accent">
+                  {chatUnreadCount > 0 ? `${chatUnreadCount} ongelezen berichten` : "Actief"}
+                </div>
               </div>
             </div>
           </div>

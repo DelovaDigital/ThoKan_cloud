@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { LoginPage } from "@/components/login-page";
 
-export default function LegacyLoginPage() {
-  redirect("/");
+export default function LoginRoutePage() {
+  return <LoginPage />;
 }

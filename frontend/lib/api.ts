@@ -91,7 +91,7 @@ function redirectToLogin() {
   } catch {
     // Ignore storage errors; redirect should still happen.
   }
-  window.location.replace("/");
+  window.location.replace("/login");
 }
 
 export async function apiRaw(path: string, options?: RequestInit): Promise<Response> {

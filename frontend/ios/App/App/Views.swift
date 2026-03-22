@@ -69,11 +69,12 @@ struct DashboardTab: View {
             ("Files", "Upload, preview en delen", "folder.fill", 1),
             ("Chat", "Directe teamgesprekken", "message.fill", 2),
             ("Mail", "Inbox en antwoorden", "envelope.fill", 3),
-            ("Settings", "Connecties en updates", "gearshape.fill", isAdmin ? 5 : 4),
+            ("Shopify", "Orders en klantberichten", "shippingbox.fill", 4),
+            ("Settings", "Connecties en updates", "gearshape.fill", isAdmin ? 6 : 5),
         ]
 
         if isAdmin {
-            actions.append(("Admin", "Users en storage", "person.2.fill", 4))
+            actions.append(("Admin", "Users en storage", "person.2.fill", 5))
         }
 
         return actions
@@ -340,15 +341,191 @@ struct DashboardTab: View {
 // MARK: - Files Tab
 
 struct FilesTab: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var viewModel = FilesViewModel()
     @State private var folderStack: [FolderItem] = []
     @State private var isCreateFolderPresented = false
     @State private var newFolderName = ""
     @State private var isFileImporterPresented = false
     @State private var selectedFileForMove: FileItem?
+    @State private var selectedFileId: String?
 
     private var currentTitle: String {
         folderStack.last?.name ?? "Files"
+    }
+
+    private var selectedFile: FileItem? {
+        viewModel.files.first(where: { $0.id == selectedFileId })
+    }
+
+    private var currentPath: String {
+        folderStack.last?.path ?? "/"
+    }
+
+    private var totalItemCount: Int {
+        viewModel.files.count + viewModel.folders.count
+    }
+
+    @ViewBuilder
+    private var compactContent: some View {
+        List {
+            Section {
+                CloudHeroCard(
+                    title: currentTitle,
+                    subtitle: "\(viewModel.files.count) files • \(viewModel.folders.count) folders",
+                    badges: [
+                        ("Path", currentPath),
+                        ("Storage", viewModel.usedStorage),
+                        ("Items", "\(totalItemCount)")
+                    ]
+                )
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            }
+
+            if let operation = viewModel.operationMessage {
+                Section {
+                    Text(operation)
+                        .foregroundStyle(.green)
+                }
+            }
+
+            if let error = viewModel.errorMessage {
+                Section {
+                    Text(error)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            if !viewModel.folders.isEmpty {
+                Section("Folders") {
+                    ForEach(viewModel.folders, id: \.id) { folder in
+                        Button {
+                            Task {
+                                folderStack.append(folder)
+                                selectedFileId = nil
+                                await viewModel.fetchFiles(folderId: folder.id)
+                            }
+                        } label: {
+                            FolderRow(folder: folder)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            if !viewModel.files.isEmpty {
+                Section("Files") {
+                    ForEach(viewModel.files, id: \.id) { file in
+                        NavigationLink {
+                            FileDetailView(file: file)
+                        } label: {
+                            FileRow(file: file)
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button {
+                                selectedFileForMove = file
+                            } label: {
+                                Label("Move", systemImage: "arrowshape.right")
+                            }
+                            .tint(.blue)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var regularContent: some View {
+        HStack(alignment: .top, spacing: 18) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    CloudHeroCard(
+                        title: currentTitle,
+                        subtitle: "Werk met een vaste detailkolom in plaats van losse previews.",
+                        badges: [
+                            ("Path", currentPath),
+                            ("Storage", viewModel.usedStorage),
+                            ("Items", "\(totalItemCount)")
+                        ]
+                    )
+
+                    if let operation = viewModel.operationMessage {
+                        Text(operation)
+                            .foregroundStyle(.green)
+                            .cloudCardStyle()
+                    }
+
+                    if let error = viewModel.errorMessage {
+                        Text(error)
+                            .foregroundStyle(.red)
+                            .cloudCardStyle()
+                    }
+
+                    if !viewModel.folders.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Folders")
+                                .font(.headline)
+
+                            ForEach(viewModel.folders, id: \.id) { folder in
+                                Button {
+                                    Task {
+                                        folderStack.append(folder)
+                                        selectedFileId = nil
+                                        await viewModel.fetchFiles(folderId: folder.id)
+                                    }
+                                } label: {
+                                    FolderRow(folder: folder)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .cloudCardStyle()
+                    }
+
+                    if !viewModel.files.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Files")
+                                .font(.headline)
+
+                            ForEach(viewModel.files, id: \.id) { file in
+                                Button {
+                                    selectedFileId = file.id
+                                } label: {
+                                    FileSelectionRow(file: file, isSelected: selectedFileId == file.id)
+                                }
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button("Move") {
+                                        selectedFileForMove = file
+                                    }
+                                }
+                            }
+                        }
+                        .cloudCardStyle()
+                    }
+                }
+                .padding()
+            }
+            .frame(maxWidth: 360)
+
+            Group {
+                if let file = selectedFile {
+                    FileDetailView(file: file)
+                } else {
+                    ContentUnavailableView(
+                        "Selecteer een file",
+                        systemImage: "doc.text.magnifyingglass",
+                        description: Text("Kies links een bestand om metadata, preview en downloadacties in een vaste kolom te openen.")
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .padding(.vertical, 8)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
     }
     
     var body: some View {
@@ -359,59 +536,14 @@ struct FilesTab: View {
                 } else if viewModel.files.isEmpty && viewModel.folders.isEmpty {
                     ContentUnavailableView("No items here", systemImage: "folder", description: Text("This folder is empty."))
                 } else {
-                    List {
-                        if let operation = viewModel.operationMessage {
-                            Section {
-                                Text(operation)
-                                    .foregroundStyle(.green)
-                            }
-                        }
-
-                        if let error = viewModel.errorMessage {
-                            Section {
-                                Text(error)
-                                    .foregroundStyle(.red)
-                            }
-                        }
-
-                        if !viewModel.folders.isEmpty {
-                            Section("Folders") {
-                                ForEach(viewModel.folders, id: \.id) { folder in
-                                    Button {
-                                        Task {
-                                            folderStack.append(folder)
-                                            await viewModel.fetchFiles(folderId: folder.id)
-                                        }
-                                    } label: {
-                                        FolderRow(folder: folder)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-
-                        if !viewModel.files.isEmpty {
-                            Section("Files") {
-                                ForEach(viewModel.files, id: \.id) { file in
-                                    NavigationLink {
-                                        FileDetailView(file: file)
-                                    } label: {
-                                        FileRow(file: file)
-                                    }
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                        Button {
-                                            selectedFileForMove = file
-                                        } label: {
-                                            Label("Move", systemImage: "arrowshape.right")
-                                        }
-                                        .tint(.blue)
-                                    }
-                                }
-                            }
-                        }
+                    if horizontalSizeClass == .regular {
+                        regularContent
+                    } else {
+                        compactContent
                     }
                 }
             }
+            .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle(currentTitle)
             .toolbar {
                 if !folderStack.isEmpty {
@@ -419,6 +551,7 @@ struct FilesTab: View {
                         Button("Back") {
                             Task {
                                 _ = folderStack.popLast()
+                                selectedFileId = nil
                                 await viewModel.fetchFiles(folderId: folderStack.last?.id)
                             }
                         }
@@ -629,9 +762,128 @@ struct DirectMessagesTab: View {
 // MARK: - Email Tab
 
 struct EmailTab: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var viewModel = EmailViewModel()
     @State private var query = ""
     @State private var isComposePresented = false
+    @State private var selectedMessageId: String?
+
+    private var unreadCount: Int {
+        viewModel.messages.filter { !($0.is_read ?? true) }.count
+    }
+
+    private var selectedMessageSummary: MailMessage? {
+        guard let selectedMessageId else { return nil }
+        return viewModel.messages.first(where: { $0.id == selectedMessageId })
+    }
+
+    @ViewBuilder
+    private var compactContent: some View {
+        List {
+            Section {
+                CloudHeroCard(
+                    title: "Inbox cockpit",
+                    subtitle: "Sneller selecteren, lezen en antwoorden zonder contextverlies.",
+                    badges: [
+                        ("Inbox", "\(viewModel.messages.count)"),
+                        ("Unread", "\(unreadCount)"),
+                        ("Search", query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Idle" : "Active")
+                    ]
+                )
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            }
+
+            if let status = viewModel.statusMessage {
+                Section {
+                    Text(status)
+                        .foregroundStyle(.green)
+                }
+            }
+
+            if let error = viewModel.errorMessage {
+                Section {
+                    Text(error)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            Section("Messages") {
+                ForEach(filteredMessages, id: \.id) { message in
+                    NavigationLink {
+                        EmailDetailView(viewModel: viewModel, messageId: message.id)
+                            .navigationBarTitleDisplayMode(.inline)
+                    } label: {
+                        MailMessageRow(message: message)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var regularContent: some View {
+        HStack(alignment: .top, spacing: 18) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    CloudHeroCard(
+                        title: "Inbox cockpit",
+                        subtitle: "Open rechts een vaste detailkaart terwijl links je selectie en filters blijven staan.",
+                        badges: [
+                            ("Inbox", "\(viewModel.messages.count)"),
+                            ("Unread", "\(unreadCount)"),
+                            ("Search", filteredMessages.count == viewModel.messages.count ? "All" : "Filtered")
+                        ]
+                    )
+
+                    if let status = viewModel.statusMessage {
+                        Text(status)
+                            .foregroundStyle(.green)
+                            .cloudCardStyle()
+                    }
+
+                    if let error = viewModel.errorMessage {
+                        Text(error)
+                            .foregroundStyle(.red)
+                            .cloudCardStyle()
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Messages")
+                            .font(.headline)
+
+                        ForEach(filteredMessages, id: \.id) { message in
+                            Button {
+                                selectedMessageId = message.id
+                            } label: {
+                                MailSelectionRow(message: message, isSelected: selectedMessageId == message.id)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .cloudCardStyle()
+                }
+                .padding()
+            }
+            .frame(maxWidth: 380)
+
+            Group {
+                if let selectedMessageId {
+                    EmailDetailView(viewModel: viewModel, messageId: selectedMessageId)
+                } else {
+                    ContentUnavailableView(
+                        "Selecteer een bericht",
+                        systemImage: "envelope.open",
+                        description: Text("Kies links een mail om body, reply en verwijderacties in dezelfde context te houden.")
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .padding(.vertical, 8)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
 
     private var filteredMessages: [MailMessage] {
         viewModel.messages.filter { message in
@@ -652,16 +904,14 @@ struct EmailTab: View {
                 } else if filteredMessages.isEmpty {
                     ContentUnavailableView("No messages", systemImage: "envelope")
                 } else {
-                    List(filteredMessages, id: \.id) { message in
-                        NavigationLink {
-                            EmailDetailView(viewModel: viewModel, messageId: message.id)
-                                .navigationBarTitleDisplayMode(.inline)
-                        } label: {
-                            MailMessageRow(message: message)
-                        }
+                    if horizontalSizeClass == .regular {
+                        regularContent
+                    } else {
+                        compactContent
                     }
                 }
             }
+            .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("Email")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search mail")
@@ -777,7 +1027,7 @@ struct EmailDetailView: View {
                 MailReplyComposerView(viewModel: viewModel, detail: detail)
             }
         }
-        .task {
+        .task(id: messageId) {
             await viewModel.fetchMessageDetail(id: messageId)
         }
     }
@@ -1126,6 +1376,15 @@ struct SettingsTab: View {
                         LabeledContent("Name", value: user.full_name)
                         LabeledContent("Email", value: user.email)
                         LabeledContent("Roles", value: user.roles.joined(separator: ", "))
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Workspace sync")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Deze app gebruikt dezelfde cloudconfiguratie als web. Globale mailinstellingen en update-state worden hier rechtstreeks overgenomen, zodat accounts consistent blijven.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
                     }
                 }
 
@@ -1156,10 +1415,22 @@ struct SettingsTab: View {
                 Section("Notifications") {
                     Toggle("New mail notifications", isOn: $mailNotificationsEnabled)
                     Toggle("New Shopify event notifications", isOn: $shopifyNotificationsEnabled)
+                    Toggle("New chat notifications", isOn: .init(
+                        get: { UserDefaults.standard.object(forKey: "chatNotificationsEnabled") as? Bool ?? true },
+                        set: { UserDefaults.standard.set($0, forKey: "chatNotificationsEnabled") }
+                    ))
 
-                    Text("Notifications are checked automatically while the app is open.")
+                    Text("Chat komt direct via push. Mail wordt nu server-side bewaakt en meteen doorgestuurd zodra er een nieuw bericht binnenkomt.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                }
+
+                if isAdmin {
+                    Section("Runtime") {
+                        LabeledContent("Host", value: viewModel.systemHostname.isEmpty ? "-" : viewModel.systemHostname)
+                        LabeledContent("Python", value: viewModel.pythonVersion.isEmpty ? "-" : viewModel.pythonVersion)
+                        LabeledContent("Update state", value: viewModel.updateStatus?.state.capitalized ?? "Idle")
+                    }
                 }
 
                 Section {
@@ -1433,6 +1704,44 @@ struct MailMessageRow: View {
     }
 }
 
+struct MailSelectionRow: View {
+    let message: MailMessage
+    let isSelected: Bool
+
+    var body: some View {
+        MailMessageRow(message: message)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                (isSelected ? Color.blue.opacity(0.12) : Color(uiColor: .secondarySystemBackground)),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(isSelected ? Color.blue.opacity(0.45) : Color.clear, lineWidth: 1)
+            )
+    }
+}
+
+struct FileSelectionRow: View {
+    let file: FileItem
+    let isSelected: Bool
+
+    var body: some View {
+        FileRow(file: file)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                (isSelected ? Color.blue.opacity(0.12) : Color(uiColor: .secondarySystemBackground)),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(isSelected ? Color.blue.opacity(0.45) : Color.clear, lineWidth: 1)
+            )
+    }
+}
+
 struct ShopifyEventRow: View {
     let event: ShopifyChatEvent
 
@@ -1594,46 +1903,70 @@ struct FileDetailView: View {
     @State private var isPreviewPresented = false
 
     var body: some View {
-        List {
-            Section("Details") {
-                LabeledContent("Name", value: file.name)
-                LabeledContent("Type", value: file.mime_type)
-                LabeledContent("Size") {
-                    Text(ByteCountFormatter().string(fromByteCount: Int64(file.size_bytes)))
-                }
-                LabeledContent("Created", value: file.created_at)
-            }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                CloudHeroCard(
+                    title: file.name,
+                    subtitle: file.mime_type,
+                    badges: [
+                        ("Size", ByteCountFormatter().string(fromByteCount: Int64(file.size_bytes))),
+                        ("Created", file.created_at),
+                        ("State", isDownloading ? "Working" : "Ready")
+                    ]
+                )
 
-            Section {
-                Button {
-                    Task {
-                        await downloadForPreview()
-                    }
-                } label: {
-                    Label("Open Preview", systemImage: "eye")
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Details")
+                        .font(.headline)
+                    InfoRow(label: "Name", value: file.name)
+                    InfoRow(label: "Type", value: file.mime_type)
+                    InfoRow(label: "Size", value: ByteCountFormatter().string(fromByteCount: Int64(file.size_bytes)))
+                    InfoRow(label: "Created", value: file.created_at)
+                    InfoRow(label: "Updated", value: file.updated_at ?? "-")
                 }
-                .disabled(isDownloading)
+                .cloudCardStyle()
 
-                Button {
-                    Task {
-                        await downloadAndShare()
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Actions")
+                        .font(.headline)
+
+                    Button {
+                        Task {
+                            await downloadForPreview()
+                        }
+                    } label: {
+                        Label("Open Preview", systemImage: "eye")
+                            .frame(maxWidth: .infinity)
                     }
-                } label: {
-                    if isDownloading {
-                        ProgressView()
-                    } else {
-                        Label("Download and Share", systemImage: "square.and.arrow.down")
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isDownloading)
+
+                    Button {
+                        Task {
+                            await downloadAndShare()
+                        }
+                    } label: {
+                        if isDownloading {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Label("Download and Share", systemImage: "square.and.arrow.down")
+                                .frame(maxWidth: .infinity)
+                        }
                     }
+                    .buttonStyle(.bordered)
                 }
-            }
+                .cloudCardStyle()
 
-            if let errorMessage {
-                Section {
+                if let errorMessage {
                     Text(errorMessage)
                         .foregroundStyle(.red)
+                        .cloudCardStyle()
                 }
             }
+            .padding()
         }
+        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(file.name)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $isSharePresented) {
