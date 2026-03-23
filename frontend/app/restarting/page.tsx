@@ -91,11 +91,11 @@ export default function RestartingPage() {
   const dotStr = ".".repeat(dots).padEnd(3, "\u00a0");
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-bg px-4 text-center">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-7 bg-bg px-4 text-center">
       {/* Pulsing logo */}
       <div className="relative flex items-center justify-center">
-        <span className="absolute inline-flex h-24 w-24 animate-ping rounded-3xl bg-accent/20" />
-        <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl bg-accent/15 text-accent">
+        <span className="absolute inline-flex h-24 w-24 animate-ping bg-accent/20" />
+        <div className="relative flex h-20 w-20 items-center justify-center bg-accent/15 text-accent">
           <Cloud className="h-10 w-10" />
         </div>
       </div>
@@ -110,7 +110,7 @@ export default function RestartingPage() {
       </div>
 
       {/* Spinner bar */}
-      <div className="h-1.5 w-56 overflow-hidden rounded-full bg-card/60">
+      <div className="h-1.5 w-56 overflow-hidden bg-card">
         <div className="h-full animate-[shimmer_1.5s_ease-in-out_infinite] rounded-full bg-accent/70" />
       </div>
 

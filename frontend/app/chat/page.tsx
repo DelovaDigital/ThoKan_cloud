@@ -159,7 +159,7 @@ export default function ChatPage() {
   return (
     <LayoutShell>
       <div className="space-y-4">
-        <section className="glass overflow-hidden rounded-[2rem] p-5 sm:p-6">
+        <section className="section-block">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/40 px-3 py-1 text-xs font-medium opacity-80">
@@ -169,11 +169,7 @@ export default function ChatPage() {
               <h1 className="mt-4 text-3xl font-semibold sm:text-4xl">Chat</h1>
               <p className="mt-2 text-sm opacity-70">Chat direct met gebruikers binnen ThoKan Cloud.</p>
             </div>
-            <button
-              onClick={() => void loadUsers()}
-              disabled={loadingUsers}
-              className="inline-flex items-center gap-2 rounded-2xl bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-            >
+            <button onClick={() => void loadUsers()} disabled={loadingUsers} className="btn-primary">
               <RefreshCw className={`h-4 w-4 ${loadingUsers ? "animate-spin" : ""}`} />
               {loadingUsers ? "Verversen..." : "Gebruikers verversen"}
             </button>
@@ -183,7 +179,7 @@ export default function ChatPage() {
         {error && <div className="rounded-[1.5rem] border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
 
         <div className="grid gap-5 xl:grid-cols-[0.9fr_1.3fr]">
-          <section className="glass rounded-[2rem] p-5 sm:p-6 h-[68vh] flex flex-col overflow-hidden">
+          <section className="section-block flex h-[68vh] flex-col overflow-hidden">
             <div className="flex items-start gap-4 border-b border-border/60 pb-5">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
                 <Users className="h-5 w-5" />
@@ -196,7 +192,7 @@ export default function ChatPage() {
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder="Zoek op naam of e-mail"
-                    className="w-full rounded-2xl border border-border bg-transparent py-2.5 pl-9 pr-3 text-sm"
+                    className="w-full border border-border bg-transparent py-2.5 pl-9 pr-3 text-sm"
                   />
                 </div>
               </div>
@@ -207,8 +203,8 @@ export default function ChatPage() {
                 <li key={user.id}>
                   <button
                     onClick={() => void openConversation(user)}
-                    className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
-                      selectedUser?.id === user.id ? "border-accent bg-accent/10" : "border-border bg-card/20 hover:bg-card/35"
+                    className={`w-full border px-4 py-3 text-left transition ${
+                      selectedUser?.id === user.id ? "border-accent bg-accent/10" : "border-border bg-card/20 hover:bg-card"
                     }`}
                   >
                     <p className="truncate text-sm font-medium">{user.full_name}</p>
@@ -216,11 +212,11 @@ export default function ChatPage() {
                   </button>
                 </li>
               ))}
-              {filteredUsers.length === 0 && <li className="rounded-2xl border border-dashed border-border p-4 text-sm opacity-60">Geen gebruikers gevonden.</li>}
+              {filteredUsers.length === 0 && <li className="border border-dashed border-border p-4 text-sm opacity-60">Geen gebruikers gevonden.</li>}
             </ul>
           </section>
 
-          <section className="glass rounded-[2rem] p-5 sm:p-6 h-[68vh] flex flex-col overflow-hidden">
+          <section className="section-block flex h-[68vh] flex-col overflow-hidden">
             {selectedUser ? (
               <>
                 <div className="border-b border-border/60 pb-5">
@@ -229,7 +225,7 @@ export default function ChatPage() {
                   <p className="mt-1 text-sm opacity-65">{selectedUser.email}</p>
                 </div>
 
-                <div ref={messagesContainerRef} className="mt-4 flex-1 space-y-2 overflow-y-auto rounded-2xl border border-border bg-card/20 p-3">
+                <div ref={messagesContainerRef} className="mt-4 flex-1 space-y-2 overflow-y-auto border border-border bg-card/20 p-3">
                   {loadingConversation ? (
                     <p className="text-sm opacity-70">Chat laden...</p>
                   ) : messages.length === 0 ? (
@@ -256,7 +252,7 @@ export default function ChatPage() {
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
                     placeholder="Typ je bericht..."
-                    className="w-full rounded-2xl border border-border bg-transparent px-3 py-2.5 text-sm"
+                    className="w-full border border-border bg-transparent px-3 py-2.5 text-sm"
                     onKeyDown={(event) => {
                       if (event.key === "Enter" && !event.shiftKey) {
                         event.preventDefault();
@@ -267,7 +263,7 @@ export default function ChatPage() {
                   <button
                     onClick={() => void sendMessage()}
                     disabled={sending || !draft.trim()}
-                    className="inline-flex items-center gap-2 rounded-2xl bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                    className="btn-primary"
                   >
                     <Send className="h-4 w-4" />
                     {sending ? "..." : "Send"}
@@ -275,7 +271,7 @@ export default function ChatPage() {
                 </div>
               </>
             ) : (
-              <div className="flex min-h-[360px] items-center justify-center rounded-2xl border border-dashed border-border p-6 text-center text-sm opacity-65">
+              <div className="flex min-h-[360px] items-center justify-center border border-dashed border-border p-6 text-center text-sm opacity-65">
                 Selecteer links een gebruiker om te chatten.
               </div>
             )}

@@ -23,7 +23,7 @@ export function ThemeToggle() {
   return (
     <button
       onClick={toggle}
-      className="flex w-full items-center justify-between rounded-2xl border border-border px-3.5 py-3 text-sm transition hover:bg-card/70"
+      className="flex w-full items-center justify-between border border-border px-3 py-2.5 text-sm transition hover:bg-card"
     >
       <span>{dark ? "Lichte" : "Donkere"} modus</span>
       {dark ? <SunMedium className="h-4 w-4 opacity-70" /> : <Moon className="h-4 w-4 opacity-70" />}

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect } from "react";
 import { useState } from "react";
 import { ArrowRight, LockKeyhole, ShieldCheck, Sparkles } from "lucide-react";
@@ -103,7 +102,7 @@ export function LoginPage() {
     >
       <form onSubmit={handleLogin} className="space-y-4">
         <div>
-          <label htmlFor="email" className="mb-2 block text-sm font-medium">
+          <label htmlFor="email" className="field-label">
             Email
           </label>
           <input
@@ -111,7 +110,7 @@ export function LoginPage() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-2xl border border-border bg-transparent px-4 py-3"
+            className="field-input"
             placeholder="you@example.com"
             required
             autoFocus
@@ -119,7 +118,7 @@ export function LoginPage() {
         </div>
 
         <div>
-          <label htmlFor="password" className="mb-2 block text-sm font-medium">
+          <label htmlFor="password" className="field-label">
             Wachtwoord
           </label>
           <input
@@ -127,14 +126,14 @@ export function LoginPage() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-2xl border border-border bg-transparent px-4 py-3"
+            className="field-input"
             placeholder="••••••••"
             required
           />
         </div>
 
         {error && (
-          <div className={`rounded-2xl p-3 text-sm ${noticeType === "success" ? "border border-green-500/50 bg-green-500/10 text-green-600 dark:text-green-300" : "border border-red-500/50 bg-red-500/10 text-red-500"}`}>
+          <div className={`border p-3 text-sm ${noticeType === "success" ? "border-green-500/50 bg-green-500/10 text-green-600 dark:text-green-300" : "border-red-500/50 bg-red-500/10 text-red-500"}`}>
             {error}
           </div>
         )}
@@ -142,19 +141,12 @@ export function LoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-accent px-4 py-3 font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+          className="btn-primary w-full"
         >
           {loading ? "Inloggen..." : "Inloggen"}
           {!loading && <ArrowRight className="h-4 w-4" />}
         </button>
       </form>
-
-      <p className="mt-6 text-center text-sm opacity-60">
-        Nog geen account?{" "}
-        <Link href="/register" className="text-accent hover:underline">
-          Registreren
-        </Link>
-      </p>
     </AuthShell>
   );
 }

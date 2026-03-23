@@ -23,7 +23,56 @@ body {
 }
 
 .glass {
-  @apply border border-border/60 bg-card/60 backdrop-blur-md shadow-glass;
+  @apply border border-border bg-card;
+}
+
+.page-shell {
+  @apply min-h-screen bg-bg;
+}
+
+.content-wrap {
+  @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+}
+
+.section-block {
+  @apply border border-border bg-card p-4 sm:p-5;
+}
+
+.section-heading {
+  @apply text-lg font-semibold sm:text-xl;
+}
+
+.section-subtext {
+  @apply mt-1 text-sm opacity-70;
+}
+
+.field-label {
+  @apply mb-2 block text-sm font-medium;
+}
+
+.field-input {
+  @apply w-full border border-border bg-transparent px-3 py-2.5 text-sm;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center gap-2 bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center border border-border px-4 py-2.5 text-sm transition hover:bg-card;
+}
+
+[class*="shadow-glass"] {
+  box-shadow: none !important;
+}
+
+[class*="rounded-2xl"],
+[class*="rounded-3xl"],
+[class*="rounded-[1.25rem]"],
+[class*="rounded-[1.5rem]"],
+[class*="rounded-[1.75rem]"],
+[class*="rounded-[2rem]"] {
+  border-radius: 0 !important;
 }
 
 .pt-safe-top {

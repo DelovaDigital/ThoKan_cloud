@@ -12,7 +12,6 @@ import {
   FileText,
   FileVideo,
   Folder,
-  FolderPlus,
   HardDrive,
   MoreHorizontal,
   Music4,
@@ -307,10 +306,18 @@ export default function FilesPage() {
   const currentFolder = useMemo(() => folders.find((f) => f.id === currentFolderId), [folders, currentFolderId]);
   const currentPath = currentFolder?.path || "/";
   const breadcrumbs = useMemo(() => currentPath.split("/").filter(Boolean), [currentPath]);
+  const rootFolders = useMemo(() => folders.filter((f) => f.parent_id === null), [folders]);
 
   const visibleFolders = useMemo(() => folders.filter((f) => f.parent_id === currentFolderId), [folders, currentFolderId]);
   const visibleFiles = useMemo(() => files.filter((f) => f.folder_id === currentFolderId), [files, currentFolderId]);
   const folderStorageBytes = useMemo(() => visibleFiles.reduce((sum, file) => sum + file.size_bytes, 0), [visibleFiles]);
+  const quickFolders = useMemo(() => {
+    if (!currentFolderId) return rootFolders;
+    const aroundCurrent = folders.filter((f) => f.parent_id === currentFolderId);
+    const currentParent = folders.filter((f) => f.parent_id === (currentFolder?.parent_id ?? null));
+    const merged = [...rootFolders, ...currentParent, ...aroundCurrent];
+    return merged.filter((folder, index) => merged.findIndex((candidate) => candidate.id === folder.id) === index).slice(0, 24);
+  }, [currentFolderId, rootFolders, folders, currentFolder?.parent_id]);
 
   const filteredFiles = useMemo(() => {
     return visibleFiles
@@ -490,58 +497,81 @@ export default function FilesPage() {
   return (
     <LayoutShell>
       <div className="space-y-5">
-        <section className="glass overflow-hidden rounded-[2rem] p-5 sm:p-6">
-          <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+        <section className="section-block">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/40 px-3 py-1 text-xs font-medium opacity-80">
-                <Sparkles className="h-3.5 w-3.5 text-accent" />
-                Bestandswerkruimte 2.0
-              </div>
-              <h1 className="mt-4 text-3xl font-semibold sm:text-4xl">Bestandsbeheer</h1>
-              <p className="mt-3 max-w-3xl text-sm opacity-70 sm:text-base">
-                Eén workspace voor uploads, previews, downloads en mapnavigatie, met een vaste detailkaart zodat openen niet meer als een losse modal aanvoelt.
+              <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-accent">
+                <Sparkles className="h-3.5 w-3.5" />
+                Cloud drive
               </p>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <button
-                  onClick={() => void loadFiles()}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  Bestanden verversen
-                </button>
-                <div className="rounded-2xl border border-border px-4 py-2.5 text-sm opacity-70">
-                  Pad: {currentPath}
-                </div>
-              </div>
+              <h1 className="mt-1.5 text-2xl font-semibold sm:text-3xl">Bestanden</h1>
+              <p className="mt-1 text-sm opacity-70">Pad: {currentPath}</p>
             </div>
-
-            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Mappen</p>
-                <p className="mt-2 text-2xl font-semibold">{visibleFolders.length}</p>
-                <p className="mt-1 text-sm opacity-60">Zichtbaar in huidig pad</p>
-              </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Bestanden</p>
-                <p className="mt-2 text-2xl font-semibold">{visibleFiles.length}</p>
-                <p className="mt-1 text-sm opacity-60">Items in deze map</p>
-              </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Opslag</p>
-                <p className="mt-2 text-2xl font-semibold">{formatBytes(folderStorageBytes)}</p>
-                <p className="mt-1 text-sm opacity-60">Huidige mapgrootte</p>
-              </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => void loadFiles()} className="btn-primary">
+                <RefreshCw className="h-4 w-4" />
+                Synchroniseren
+              </button>
+              <button onClick={navigateUp} disabled={!currentFolder} className="btn-secondary disabled:opacity-50">
+                Niveau omhoog
+              </button>
             </div>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            <div className="border border-border px-3 py-2.5 text-sm">Mappen: <span className="font-semibold">{visibleFolders.length}</span></div>
+            <div className="border border-border px-3 py-2.5 text-sm">Bestanden: <span className="font-semibold">{visibleFiles.length}</span></div>
+            <div className="border border-border px-3 py-2.5 text-sm">Opslag: <span className="font-semibold">{formatBytes(folderStorageBytes)}</span></div>
           </div>
         </section>
 
-        <UploadDropzone onUploaded={loadFiles} folderId={currentFolderId} />
+        <section className="section-block">
+          <UploadDropzone onUploaded={loadFiles} folderId={currentFolderId} />
+        </section>
 
         {userNotice && <div className="glass rounded-[1.5rem] p-4 text-sm opacity-90">{userNotice}</div>}
         {userError && <div className="glass rounded-[1.5rem] border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{userError}</div>}
 
-        <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-          <section className="glass rounded-[2rem] p-5">
+        <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
+          <section className="section-block">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.14em] opacity-65">Snelmappen</h2>
+            <div className="mt-3 space-y-1.5">
+              <button
+                onClick={() => setCurrentFolderId(null)}
+                className={`w-full border px-3 py-2 text-left text-sm transition ${
+                  currentFolderId === null ? "border-accent/40 bg-accent/10 text-accent" : "border-border hover:bg-card"
+                }`}
+              >
+                Mijn bestanden
+              </button>
+              {quickFolders.map((folder) => (
+                <button
+                  key={folder.id}
+                  onClick={() => setCurrentFolderId(folder.id)}
+                  className={`w-full truncate border px-3 py-2 text-left text-sm transition ${
+                    currentFolderId === folder.id ? "border-accent/40 bg-accent/10 text-accent" : "border-border hover:bg-card"
+                  }`}
+                  title={folder.path}
+                >
+                  {folder.name}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 border-t border-border pt-4">
+              <form onSubmit={createFolder} className="space-y-2">
+                <p className="text-xs uppercase tracking-[0.14em] opacity-60">Nieuwe map</p>
+                <input
+                  value={newFolder}
+                  onChange={(e) => setNewFolder(e.target.value)}
+                  placeholder="Mapnaam"
+                  className="field-input"
+                />
+                <button className="btn-primary w-full">Aanmaken</button>
+              </form>
+            </div>
+          </section>
+
+          <section className="section-block">
             <div className="flex items-start gap-4 border-b border-border/60 pb-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
                 <HardDrive className="h-5 w-5" />
@@ -576,36 +606,15 @@ export default function FilesPage() {
               })}
             </div>
           </section>
-
-          <form onSubmit={createFolder} className="glass rounded-[2rem] p-5">
-            <div className="flex items-start gap-4 border-b border-border/60 pb-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
-                <FolderPlus className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold">Map aanmaken</h2>
-                <p className="mt-1 text-sm opacity-65">Voeg een nieuwe map toe in de huidige locatie.</p>
-              </div>
-            </div>
-            <div className="mt-4 flex gap-2">
-              <input
-                value={newFolder}
-                onChange={(e) => setNewFolder(e.target.value)}
-                placeholder="Nieuwe mapnaam"
-                className="flex-1 rounded-2xl border border-border bg-transparent px-3 py-2.5"
-              />
-              <button className="rounded-2xl bg-accent/80 px-4 py-2.5 text-white">Aanmaken</button>
-            </div>
-          </form>
         </div>
 
-        <section className="glass sticky top-[92px] z-10 rounded-[1.75rem] p-4 backdrop-blur">
+        <section className="section-block sticky top-[92px] z-10">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold">Zoeken, filteren en sorteren</p>
               <p className="text-xs opacity-55">Verfijn het huidige mapoverzicht zonder van locatie te wisselen.</p>
             </div>
-            <div className="rounded-full bg-accent/15 px-3 py-1 text-xs font-medium text-accent">Live filters</div>
+            <div className="border border-border px-2.5 py-1 text-xs">Explorer filters</div>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="relative">
@@ -614,13 +623,13 @@ export default function FilesPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Zoek op bestandsnaam..."
-                className="w-full rounded-xl border border-border bg-transparent py-2 pl-9 pr-3 text-sm"
+                className="w-full border border-border bg-transparent py-2 pl-9 pr-3 text-sm"
               />
             </div>
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
-              className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+              className="border border-border bg-transparent px-3 py-2 text-sm"
             >
               <option value="all">Alle types</option>
               <option value="image">Afbeeldingen</option>
@@ -633,7 +642,7 @@ export default function FilesPage() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-              className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+              className="border border-border bg-transparent px-3 py-2 text-sm"
             >
               <option value="date_desc">Sorteer: Nieuwste eerst</option>
               <option value="name_asc">Sorteer: Naam A-Z</option>
@@ -643,7 +652,7 @@ export default function FilesPage() {
         </section>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_380px]">
-          <section className="glass rounded-[2rem] p-5 sm:p-6">
+          <section className="section-block">
             <div className="mb-5 flex items-center justify-between gap-3 border-b border-border/60 pb-5">
               <div>
                 <h2 className="text-lg font-semibold">{currentFolder ? currentFolder.name : "Mijn bestanden"}</h2>
@@ -656,27 +665,36 @@ export default function FilesPage() {
               )}
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
+              <div className="hidden grid-cols-[minmax(0,1fr)_140px_150px] gap-2 border border-border px-3 py-2 text-xs font-medium uppercase tracking-[0.1em] opacity-60 md:grid">
+                <span>Naam</span>
+                <span>Type</span>
+                <span>Grootte / Datum</span>
+              </div>
               {visibleFolders.map((folder) => (
                 <div
                   key={folder.id}
-                  className="group flex items-center justify-between rounded-[1.5rem] border border-border bg-card/25 p-4 transition hover:border-accent/25 hover:bg-card/45"
+                  className="group grid grid-cols-1 gap-2 border border-border px-3 py-3 transition hover:border-accent/25 hover:bg-card md:grid-cols-[minmax(0,1fr)_140px_150px]"
                 >
                   <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setCurrentFolderId(folder.id)}>
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500">
+                    <div className="flex h-9 w-9 items-center justify-center bg-amber-500/10 text-amber-500">
                       <Folder className="h-5 w-5" />
                     </div>
                     <div className="min-w-0">
                       <p className="truncate font-medium">{folder.name}</p>
-                      <p className="truncate text-xs opacity-60">{folder.path}</p>
+                      <p className="truncate text-xs opacity-60">{folder.path || "/"}</p>
                     </div>
                   </button>
+                  <p className="text-xs opacity-65">Map</p>
+                  <div className="flex items-center justify-between gap-2 md:justify-end">
+                    <p className="text-xs opacity-60">-</p>
                   <button
-                    className="rounded-xl border border-border px-3 py-2 text-sm transition hover:bg-red-500/20"
+                    className="border border-border px-3 py-1.5 text-xs transition hover:bg-red-500/20"
                     onClick={() => deleteFolder(folder.id)}
                   >
                     Verwijderen
                   </button>
+                  </div>
                 </div>
               ))}
 
@@ -686,12 +704,12 @@ export default function FilesPage() {
                 return (
                   <div
                     key={file.id}
-                    className={`relative flex items-center justify-between rounded-[1.5rem] border p-4 text-sm transition ${
-                      isActive ? "border-accent/35 bg-accent/5" : "border-border bg-card/20 hover:bg-card/35"
+                    className={`relative grid grid-cols-1 gap-2 border px-3 py-3 text-sm transition md:grid-cols-[minmax(0,1fr)_140px_150px] ${
+                      isActive ? "border-accent/35 bg-accent/5" : "border-border bg-card/20 hover:bg-card"
                     }`}
                   >
                     <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => void openPreview(file)}>
-                      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${getFileSurface(file)}`}>
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center ${getFileSurface(file)}`}>
                         <Icon className="h-5 w-5" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -701,14 +719,16 @@ export default function FilesPage() {
                             <span className="rounded-full border border-border/80 px-2 py-0.5 text-[11px] opacity-70">Preview</span>
                           )}
                         </div>
-                        <p className="mt-1 text-xs opacity-70">{formatBytes(file.size_bytes)} • {file.mime_type || "onbekend"}</p>
-                        <p className="mt-1 text-[11px] opacity-55">Toegevoegd: {formatDateLabel(file.created_at)}</p>
+                        <p className="mt-1 text-[11px] opacity-60">{file.mime_type || "onbekend"}</p>
                       </div>
                     </button>
+                    <p className="text-xs opacity-65">{getFileKind(file)}</p>
+                    <div className="flex items-center justify-between gap-2 md:justify-end">
+                      <p className="text-xs opacity-60">{formatBytes(file.size_bytes)} • {formatDateLabel(file.created_at)}</p>
 
                     <div className="relative ml-3" data-file-actions="true">
                       <button
-                        className="rounded-xl border border-border px-3 py-2 text-lg leading-none transition hover:bg-accent/10"
+                        className="border border-border px-3 py-1.5 text-lg leading-none transition hover:bg-accent/10"
                         onClick={(e) => {
                           e.stopPropagation();
                           setOpenActionFileId((prev) => (prev === file.id ? null : file.id));
@@ -754,6 +774,7 @@ export default function FilesPage() {
                         </div>
                       )}
                     </div>
+                    </div>
                   </div>
                 );
               })}
@@ -770,7 +791,7 @@ export default function FilesPage() {
             </div>
           </section>
 
-          <aside className="glass rounded-[2rem] p-5 sm:p-6 xl:sticky xl:top-[96px] xl:h-fit">
+          <aside className="section-block xl:sticky xl:top-[96px] xl:h-fit">
             <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-5">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-45">Detailkaart</p>

@@ -441,7 +441,7 @@ export default function MailPage() {
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as SortOrder)}
-      className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+      className="border border-border bg-transparent px-3 py-2 text-sm"
     >
       <option value="newest">Nieuwste eerst</option>
       <option value="oldest">Oudste eerst</option>
@@ -458,7 +458,7 @@ export default function MailPage() {
   return (
     <LayoutShell>
       <div className="space-y-5">
-        <section className="glass overflow-hidden rounded-[2rem] p-5 sm:p-6">
+        <section className="section-block">
           <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/40 px-3 py-1 text-xs font-medium opacity-80">
@@ -473,7 +473,7 @@ export default function MailPage() {
                 {browserNotificationsSupported() && notificationPermission !== "granted" && (
                   <button
                     onClick={() => void enableNotifications()}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-2.5 text-sm transition hover:bg-card/70"
+                    className="btn-secondary"
                     title="Browsermeldingen inschakelen"
                   >
                     <Bell className="h-4 w-4" />
@@ -487,21 +487,21 @@ export default function MailPage() {
                     setBody("");
                     setShowCompose(true);
                   }}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+                  className="btn-primary"
                 >
                   <MailPlus className="h-4 w-4" />
                   Nieuwe e-mail
                 </button>
                 <button
                   onClick={refreshCurrentFolder}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-2.5 text-sm transition hover:bg-card/70"
+                  className="btn-secondary"
                 >
                   <RefreshCw className="h-4 w-4" />
                   Verversen
                 </button>
                 <button
                   onClick={() => setShowSettings(true)}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-2.5 text-sm transition hover:bg-card/70"
+                  className="btn-secondary"
                 >
                   <Settings2 className="h-4 w-4" />
                   Instellingen
@@ -535,7 +535,7 @@ export default function MailPage() {
         </section>
 
         {statusMsg && (
-          <div className="glass flex items-center justify-between gap-3 rounded-[1.5rem] px-4 py-3 text-sm">
+          <div className="section-block flex items-center justify-between gap-3 text-sm">
             <span>{statusMsg}</span>
             <button className="rounded-lg border border-border p-1 opacity-60 transition hover:opacity-100" onClick={() => setStatusMsg("") }>
               <X className="h-4 w-4" />
@@ -544,20 +544,20 @@ export default function MailPage() {
         )}
 
         {browserNotificationsSupported() && notificationPermission === "granted" && (
-          <div className="glass rounded-[1.5rem] px-4 py-3 text-sm opacity-75">
+          <div className="section-block text-sm opacity-75">
             Browsermeldingen zijn actief voor nieuwe e-mail.
           </div>
         )}
 
         <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)_380px]">
-          <aside className="glass flex h-fit flex-col gap-2 rounded-[2rem] p-4 xl:sticky xl:top-[96px]">
+          <aside className="section-block flex h-fit flex-col gap-2 xl:sticky xl:top-[96px]">
             <p className="px-2 text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Mappen</p>
             <button
               onClick={() => {
                 setActiveFolder("inbox");
                 if (config?.has_password) loadInbox();
               }}
-              className={`flex items-center justify-between rounded-[1.25rem] px-3 py-3 text-sm transition ${
+              className={`flex items-center justify-between border px-3 py-3 text-sm transition ${
                 activeFolder === "inbox" ? "bg-accent/15 font-medium" : "hover:bg-card/60"
               }`}
             >
@@ -572,7 +572,7 @@ export default function MailPage() {
                 setActiveFolder("sent");
                 if (config?.has_password && sentMessages.length === 0) loadSent();
               }}
-              className={`flex items-center justify-between rounded-[1.25rem] px-3 py-3 text-sm transition ${
+              className={`flex items-center justify-between border px-3 py-3 text-sm transition ${
                 activeFolder === "sent" ? "bg-accent/15 font-medium" : "hover:bg-card/60"
               }`}
             >
@@ -583,14 +583,14 @@ export default function MailPage() {
               {totalSent > 0 && <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs">{totalSent}</span>}
             </button>
 
-            <div className="mt-3 rounded-[1.5rem] border border-border/70 bg-card/30 p-4 text-sm">
+            <div className="mt-3 border border-border/70 bg-card/30 p-4 text-sm">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Syncstatus</p>
               <p className="mt-2 font-medium">{mailIsGlobal ? "Globale mailboxbasis" : "Accountgebonden mailbox"}</p>
               <p className="mt-2 text-xs opacity-65">De mailmodule gebruikt dezelfde workspace-logica als settings en dashboard.</p>
             </div>
           </aside>
 
-          <main className="glass min-h-0 rounded-[2rem] p-5 sm:p-6">
+          <main className="section-block min-h-0">
             <div className="flex flex-col gap-4 border-b border-border/60 pb-5 md:flex-row md:items-start md:justify-between">
               <div>
                 <h2 className="text-xl font-semibold">{folderLabel}</h2>

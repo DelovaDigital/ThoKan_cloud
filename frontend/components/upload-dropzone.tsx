@@ -24,7 +24,7 @@ export function UploadDropzone({ onUploaded, folderId }: { onUploaded: () => voi
 
   return (
     <div
-      className="glass rounded-2xl border-2 border-dashed p-6 text-center transition hover:border-accent"
+      className="border-2 border-dashed border-border bg-card p-5 text-center transition hover:border-accent"
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
@@ -33,7 +33,7 @@ export function UploadDropzone({ onUploaded, folderId }: { onUploaded: () => voi
     >
       <p className="text-sm">Sleep bestanden hierheen</p>
       <button
-        className="mt-3 rounded-xl bg-accent/80 px-4 py-2 text-white"
+        className="mt-3 bg-accent px-4 py-2 text-sm font-medium text-white"
         disabled={uploading}
         onClick={() => inputRef.current?.click()}
       >

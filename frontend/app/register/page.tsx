@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, CheckCircle2, ShieldCheck, Sparkles, UserPlus } from "lucide-react";
+import { ArrowRight, CheckCircle2, ShieldCheck, Sparkles } from "lucide-react";
 import { api } from "@/lib/api";
 import { AuthShell } from "@/components/auth-shell";
 
@@ -92,7 +91,7 @@ export default function RegisterPage() {
     >
       <form onSubmit={handleRegister} className="space-y-4">
         <div>
-          <label htmlFor="fullName" className="mb-2 block text-sm font-medium">
+          <label htmlFor="fullName" className="field-label">
             Volledige naam
           </label>
           <input
@@ -100,7 +99,7 @@ export default function RegisterPage() {
             type="text"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            className="w-full rounded-2xl border border-border bg-transparent px-4 py-3"
+            className="field-input"
             placeholder="John Doe"
             required
             autoFocus
@@ -108,7 +107,7 @@ export default function RegisterPage() {
         </div>
 
         <div>
-          <label htmlFor="email" className="mb-2 block text-sm font-medium">
+          <label htmlFor="email" className="field-label">
             Email
           </label>
           <input
@@ -116,14 +115,14 @@ export default function RegisterPage() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-2xl border border-border bg-transparent px-4 py-3"
+            className="field-input"
             placeholder="you@example.com"
             required
           />
         </div>
 
         <div>
-          <label htmlFor="password" className="mb-2 block text-sm font-medium">
+          <label htmlFor="password" className="field-label">
             Wachtwoord
           </label>
           <input
@@ -131,7 +130,7 @@ export default function RegisterPage() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-2xl border border-border bg-transparent px-4 py-3"
+            className="field-input"
             placeholder="••••••••"
             required
             minLength={8}
@@ -139,7 +138,7 @@ export default function RegisterPage() {
         </div>
 
         <div>
-          <label htmlFor="confirmPassword" className="mb-2 block text-sm font-medium">
+          <label htmlFor="confirmPassword" className="field-label">
             Bevestig wachtwoord
           </label>
           <input
@@ -147,7 +146,7 @@ export default function RegisterPage() {
             type="password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            className="w-full rounded-2xl border border-border bg-transparent px-4 py-3"
+            className="field-input"
             placeholder="••••••••"
             required
             minLength={8}
@@ -155,7 +154,7 @@ export default function RegisterPage() {
         </div>
 
         {error && (
-          <div className="rounded-2xl border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-500">
+          <div className="border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-500">
             {error}
           </div>
         )}
@@ -163,26 +162,12 @@ export default function RegisterPage() {
         <button
           type="submit"
           disabled={loading}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-accent px-4 py-3 font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+          className="btn-primary w-full"
         >
           {loading ? "Account aanmaken..." : "Account aanmaken"}
           {!loading && <ArrowRight className="h-4 w-4" />}
         </button>
       </form>
-
-      <div className="mt-6 rounded-[1.5rem] border border-border/70 bg-card/35 p-4 text-sm opacity-70">
-        <div className="flex items-center gap-2">
-          <UserPlus className="h-4 w-4 text-accent" />
-          Nieuwe accounts worden automatisch ingelogd na succesvolle registratie.
-        </div>
-      </div>
-
-      <p className="mt-6 text-center text-sm opacity-60">
-        Heb je al een account?{" "}
-        <Link href="/login" className="text-accent hover:underline">
-          Inloggen
-        </Link>
-      </p>
     </AuthShell>
   );
 }
