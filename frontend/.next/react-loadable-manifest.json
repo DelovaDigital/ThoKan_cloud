@@ -1,14 +1,14 @@
 {
   "node_modules/@capacitor/app/dist/esm/index.js -> ./web": {
-    "id": 8310,
+    "id": 3800,
     "files": [
-      "static/chunks/310.0ae95c60ed50d8f6.js"
+      "static/chunks/800.4768cd1131c37ccf.js"
     ]
   },
   "node_modules/@capacitor/network/dist/esm/index.js -> ./web": {
-    "id": 3885,
+    "id": 6291,
     "files": [
-      "static/chunks/885.1e2486779e7279aa.js"
+      "static/chunks/291.03f2c4c4183da25c.js"
     ]
   }
 }

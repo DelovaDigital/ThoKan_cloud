@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight } from "lucide-react";
+import { motion, type Variants } from "framer-motion";
+import { ArrowRight, Shield, Zap, Lock, Cloud } from "lucide-react";
 
 type AuthShellFeature = {
   title: string;
@@ -26,6 +27,16 @@ type AuthShellProps = {
   children: ReactNode;
 };
 
+const containerVariants: Variants = {
+  hidden:  {},
+  visible: { transition: { staggerChildren: 0.07 } },
+};
+
+const itemVariants: Variants = {
+  hidden:  { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
+};
+
 export function AuthShell({
   badge,
   title,
@@ -42,57 +53,106 @@ export function AuthShell({
   children,
 }: AuthShellProps) {
   return (
-    <div className="page-shell">
-      <div className="content-wrap py-4 sm:py-6">
-        <div className="grid gap-4 lg:grid-cols-[1fr_minmax(340px,460px)]">
-          <section className="section-block">
-            <div className="border-b border-border pb-4">
-              <p className="text-xs uppercase tracking-[0.16em] opacity-60">{badge}</p>
-              <img src="/Logo_tekst_CV.png" alt="ThoKan Cloud" className="mt-3 h-10 w-auto sm:h-12" />
-              <h1 className="mt-4 text-2xl font-semibold leading-tight sm:text-3xl">{title}</h1>
-              <p className="mt-2 text-sm opacity-70 sm:text-base">{description}</p>
-            </div>
+    <div className="min-h-screen bg-bg">
+      <div className="flex min-h-screen">
+        {/* ─── Left panel (brand) ──────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, x: -24 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+          className="relative hidden w-[480px] shrink-0 flex-col justify-between overflow-hidden bg-card p-10 lg:flex border-r border-border"
+        >
+          {/* Subtle background decoration */}
+          <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-accent/5" />
+          <div className="pointer-events-none absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-accent/5" />
 
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {/* Logo */}
+          <div className="relative">
+            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-border bg-bg px-3 py-1 text-xs font-medium text-muted">
+              <div className="h-1.5 w-1.5 rounded-full bg-success" />
+              {badge}
+            </div>
+            <div className="mt-4">
+              <img src="/Logo_tekst_CV.png" alt="ThoKan Cloud" className="h-9 w-auto" />
+            </div>
+          </div>
+
+          {/* Main copy */}
+          <div className="relative space-y-4">
+            <h1 className="text-3xl font-semibold leading-tight tracking-tight">{title}</h1>
+            <p className="text-base leading-relaxed text-muted">{description}</p>
+
+            {/* Feature list */}
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              className="mt-6 space-y-3"
+            >
               {features.map((feature) => (
-                <div key={feature.title} className="border border-border p-3">
-                  <div className="flex items-start gap-2.5">
-                    <div className="mt-0.5 text-accent">{feature.icon}</div>
-                    <div>
-                      <p className="text-sm font-medium">{feature.title}</p>
-                      <p className="mt-1 text-xs opacity-70">{feature.description}</p>
-                    </div>
+                <motion.div
+                  key={feature.title}
+                  variants={itemVariants}
+                  className="flex items-start gap-3 rounded-xl border border-border bg-bg p-3.5"
+                >
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
+                    {feature.icon}
                   </div>
-                </div>
+                  <div>
+                    <p className="text-sm font-medium">{feature.title}</p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-muted">{feature.description}</p>
+                  </div>
+                </motion.div>
               ))}
+            </motion.div>
+          </div>
+
+          {/* Footer info */}
+          <div className="relative">
+            <div className="flex items-center gap-2 text-xs text-muted">
+              <Shield className="h-3.5 w-3.5" />
+              <span>End-to-end versleuteld · Self-hosted · {asideLabel}: {asideValue}</span>
             </div>
-          </section>
+          </div>
+        </motion.div>
 
-          <section className="section-block">
-            <div className="mb-5 flex items-start justify-between gap-4 border-b border-border pb-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] opacity-60">{eyebrow}</p>
-                <h2 className="mt-1 text-xl font-semibold sm:text-2xl">{formTitle}</h2>
-                <p className="mt-1 text-sm opacity-70">{formDescription}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[11px] uppercase tracking-[0.14em] opacity-55">{asideLabel}</p>
-                <p className="text-sm font-medium">{asideValue}</p>
-              </div>
+        {/* ─── Right panel (form) ──────────────────────────────── */}
+        <div className="flex flex-1 items-center justify-center p-6 sm:p-10">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: "easeOut", delay: 0.05 }}
+            className="w-full max-w-md"
+          >
+            {/* Mobile logo (only shown on small screens) */}
+            <div className="mb-8 flex items-center gap-3 lg:hidden">
+              <img src="/Logo_tekst_CV.png" alt="ThoKan Cloud" className="h-7 w-auto" />
             </div>
 
-            {children}
+            <div className="mb-8">
+              <p className="mb-1.5 text-xs font-medium uppercase tracking-widest text-muted">{eyebrow}</p>
+              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">{formTitle}</h2>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted">{formDescription}</p>
+            </div>
 
-            <div className="mt-5 border-t border-border pt-3 text-sm opacity-80">
-              <Link href={secondaryHref} className="inline-flex items-center gap-2 font-medium text-accent hover:underline">
+            <div className="space-y-4">
+              {children}
+            </div>
+
+            <div className="mt-6 border-t border-border pt-5">
+              <Link
+                href={secondaryHref}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-accent transition-colors hover:text-accent/80"
+              >
                 {secondaryLabel}
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <p className="mt-1.5 opacity-70">{secondaryText}</p>
+              <p className="mt-1 text-xs text-muted">{secondaryText}</p>
             </div>
-          </section>
+          </motion.div>
         </div>
       </div>
     </div>
   );
 }
+

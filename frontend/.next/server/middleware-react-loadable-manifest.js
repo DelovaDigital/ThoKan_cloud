@@ -1,1 +1,1 @@
-self.__REACT_LOADABLE_MANIFEST='{"node_modules/@capacitor/app/dist/esm/index.js -> ./web":{"id":8310,"files":["static/chunks/310.0ae95c60ed50d8f6.js"]},"node_modules/@capacitor/network/dist/esm/index.js -> ./web":{"id":3885,"files":["static/chunks/885.1e2486779e7279aa.js"]}}';
+self.__REACT_LOADABLE_MANIFEST='{"node_modules/@capacitor/app/dist/esm/index.js -> ./web":{"id":3800,"files":["static/chunks/800.4768cd1131c37ccf.js"]},"node_modules/@capacitor/network/dist/esm/index.js -> ./web":{"id":6291,"files":["static/chunks/291.03f2c4c4183da25c.js"]}}';

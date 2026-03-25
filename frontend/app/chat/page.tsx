@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MessageSquare, RefreshCw, Search, Send, Users } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
+import { PageTransition } from "@/components/page-transition";
 import { api } from "@/lib/api";
 
 type ChatUser = {
@@ -158,6 +159,7 @@ export default function ChatPage() {
 
   return (
     <LayoutShell>
+      <PageTransition>
       <div className="space-y-4">
         <section className="section-block">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -278,6 +280,7 @@ export default function ChatPage() {
           </section>
         </div>
       </div>
+      </PageTransition>
     </LayoutShell>
   );
 }

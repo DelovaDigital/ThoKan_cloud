@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import { Activity, ArrowUpRight, Boxes, HardDrive, PackageCheck, RefreshCw, Server, ShoppingCart, Sparkles } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
+import { PageTransition } from "@/components/page-transition";
 import { api } from "@/lib/api";
 
 type DashboardData = {
@@ -94,8 +96,13 @@ type ShopifyOrderEvent = {
 function ProgressBar({ current, total, color = "bg-accent" }: { current: number; total: number; color?: string }) {
   const percent = total > 0 ? Math.min((current / total) * 100, 100) : 0;
   return (
-    <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-card/50">
-      <div className={`h-full ${color} transition-all duration-500`} style={{ width: `${percent}%` }} />
+    <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-border">
+      <motion.div
+        className={`h-full rounded-full ${color}`}
+        initial={{ width: 0 }}
+        animate={{ width: `${percent}%` }}
+        transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+      />
     </div>
   );
 }
@@ -126,17 +133,27 @@ function SummaryCard({
   label,
   value,
   hint,
+  icon: Icon,
 }: {
   label: string;
   value: string | number;
   hint: string;
+  icon?: React.ElementType;
 }) {
   return (
-    <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">{label}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
-      <p className="mt-1 text-sm opacity-60">{hint}</p>
-    </div>
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="rounded-xl border border-border bg-card p-4 shadow-sm"
+    >
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium uppercase tracking-widest text-muted">{label}</p>
+        {Icon && <Icon className="h-4 w-4 text-muted" />}
+      </div>
+      <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
+      <p className="mt-1 text-xs text-muted">{hint}</p>
+    </motion.div>
   );
 }
 
@@ -333,73 +350,71 @@ export default function DashboardPage() {
 
   return (
     <LayoutShell>
-      <div className="space-y-5">
-        <section className="glass overflow-hidden rounded-[2rem] p-5 sm:p-6">
-          <div className="grid gap-5 lg:grid-cols-[1.25fr_0.95fr] lg:items-center">
+      <PageTransition>
+      <div className="space-y-6">
+        {/* ── Hero ─────────────────────────────────────────── */}
+        <section className="section-block">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/40 px-3 py-1 text-xs font-medium opacity-80">
-                <Sparkles className="h-3.5 w-3.5 text-accent" />
+              <div className="badge badge-accent mb-3">
+                <Sparkles className="mr-1 h-3 w-3" />
                 Operationeel overzicht
               </div>
-              <h1 className="mt-4 text-3xl font-semibold sm:text-4xl">Overzicht</h1>
-              <p className="mt-3 max-w-3xl text-sm opacity-70 sm:text-base">
-                Eén operationele cockpit voor opslag, recente activiteit, Shopify-orders en Gelato-opvolging, met vaste detailzones in plaats van losse modals.
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Dashboard</h1>
+              <p className="mt-1.5 text-sm text-muted">
+                Opslag, activiteit, Shopify-orders en Gelato-opvolging op één plek.
               </p>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <button
-                  onClick={loadData}
-                  disabled={loading}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-                >
-                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                  {loading ? "Verversen..." : "Overzicht verversen"}
-                </button>
-                <div className="rounded-2xl border border-border px-4 py-2.5 text-sm opacity-70">
-                  {orders.length} Shopify bestellingen geladen
-                </div>
-              </div>
             </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <SummaryCard label="Opslag gebruikt" value={formatBytes(data?.used_bytes || 0)} hint="Data van gebruikers in opslag" />
-              <SummaryCard label="Files" value={data?.files_count || 0} hint="Items in cloudopslag" />
-              <SummaryCard label="Systeemschijf" value={`${storagePercent.toFixed(1)}%`} hint="Huidig schijfgebruik platform" />
-              <SummaryCard label="Activiteit" value={filteredActivity.length} hint="Zichtbare recente events" />
-            </div>
+            <button
+              onClick={loadData}
+              disabled={loading}
+              className="btn-secondary shrink-0"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              {loading ? "Verversen…" : "Verversen"}
+            </button>
           </div>
         </section>
 
-        <section className="glass rounded-[2rem] p-5 sm:p-6">
-          <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        {/* ── Stat cards ────────────────────────────────────── */}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <SummaryCard icon={HardDrive} label="Opslag gebruikt" value={formatBytes(data?.used_bytes || 0)} hint="Data van gebruikers in opslag" />
+          <SummaryCard icon={Boxes} label="Bestanden" value={data?.files_count || 0} hint="Items in cloudopslag" />
+          <SummaryCard icon={Server} label="Systeemschijf" value={`${storagePercent.toFixed(1)}%`} hint="Huidig schijfgebruik platform" />
+          <SummaryCard icon={Activity} label="Activiteit" value={filteredActivity.length} hint="Zichtbare recente events" />
+        </div>
+
+        <section className="section-block">
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-xl font-semibold">Operationele lanes</h2>
-              <p className="mt-1 text-sm opacity-65">
-                De dashboardlaag stuurt nu door naar dezelfde vaste productstromen als de vernieuwde files-, settings- en commerce-schermen.
+              <h2 className="section-heading">Operationele lanes</h2>
+              <p className="section-subtext">
+                Snelle toegang tot de kernmodules van het platform.
               </p>
             </div>
-            <div className="rounded-full bg-card/40 px-3 py-1 text-xs font-medium opacity-75">Vaste werkruimtehiërarchie</div>
+            <span className="badge badge-muted">Werkruimtehiërachie</span>
           </div>
 
           <div className="grid gap-3 lg:grid-cols-3">
             {operationsModules.map((module) => (
-              <div key={module.title} className="rounded-[1.5rem] border border-border bg-card/25 p-4">
+              <div key={module.title} className="rounded-xl border border-border bg-bg p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold">{module.title}</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.16em] opacity-45">{module.status}</p>
+                    <p className="mt-0.5 text-xs uppercase tracking-widest text-muted">{module.status}</p>
                   </div>
                   {module.title === "Bestandsbasis" ? (
-                    <HardDrive className="h-5 w-5 text-accent" />
+                    <HardDrive className="h-4 w-4 text-accent" />
                   ) : module.title === "Commerce flow" ? (
-                    <PackageCheck className="h-5 w-5 text-accent" />
+                    <PackageCheck className="h-4 w-4 text-accent" />
                   ) : (
-                    <Activity className="h-5 w-5 text-accent" />
+                    <Activity className="h-4 w-4 text-accent" />
                   )}
                 </div>
-                <p className="mt-3 text-sm opacity-70">{module.description}</p>
-                <Link href={module.href} className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-accent hover:underline">
-                  Open werkruimte
-                  <ArrowUpRight className="h-4 w-4" />
+                <p className="mt-2 text-sm text-muted">{module.description}</p>
+                <Link href={module.href} className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent transition-colors hover:text-accent/80">
+                  Open
+                  <ArrowUpRight className="h-3.5 w-3.5" />
                 </Link>
               </div>
             ))}
@@ -407,9 +422,9 @@ export default function DashboardPage() {
         </section>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <div className="glass rounded-[1.75rem] p-5">
+          <div className="section-block">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accent/15 text-accent">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10 text-accent">
                 <HardDrive className="h-5 w-5" />
               </div>
               <div>
@@ -421,67 +436,67 @@ export default function DashboardPage() {
             <ProgressBar current={data?.used_bytes || 0} total={(data?.system_info?.storage_total_gb || 1) * 1024 ** 3} />
           </div>
 
-          <div className="glass rounded-[1.75rem] p-5">
+          <div className="section-block">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accent/15 text-accent">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10 text-accent">
                 <Boxes className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="text-sm font-medium opacity-70">Totaal bestanden</h3>
-                <p className="text-xs opacity-55">Beheerde opgeslagen items</p>
+                <h3 className="text-sm font-medium text-muted">Totaal bestanden</h3>
+                <p className="text-xs text-muted">Opgeslagen items</p>
               </div>
             </div>
-            <p className="mt-4 text-3xl font-bold">{data?.files_count || 0}</p>
-            <p className="mt-2 text-sm opacity-60">bestanden geüpload</p>
+            <p className="mt-4 text-3xl font-semibold tracking-tight">{data?.files_count || 0}</p>
+            <p className="mt-1 text-xs text-muted">bestanden geüpload</p>
           </div>
 
-          <div className="glass rounded-[1.75rem] p-5 md:col-span-2 xl:col-span-1">
+          <div className="section-block md:col-span-2 xl:col-span-1">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accent/15 text-accent">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10 text-accent">
                 <Server className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="text-sm font-medium opacity-70">Systeemschijf</h3>
-                <p className="text-xs opacity-55">Hostcapaciteit en vrije ruimte</p>
+                <h3 className="text-sm font-medium text-muted">Systeemschijf</h3>
+                <p className="text-xs text-muted">Hostcapaciteit</p>
               </div>
             </div>
-            <p className="mt-4 text-3xl font-bold">{storagePercent.toFixed(1)}%</p>
+            <p className="mt-4 text-3xl font-semibold tracking-tight">{storagePercent.toFixed(1)}%</p>
             <ProgressBar
               current={data?.system_info?.storage_used_gb || 0}
               total={data?.system_info?.storage_total_gb || 1}
               color={storageColor}
             />
-            <p className="mt-1 text-xs opacity-60">
+            <p className="mt-1.5 text-xs text-muted">
               {data?.system_info?.storage_free_gb.toFixed(1)} GB vrij van {data?.system_info?.storage_total_gb.toFixed(1)} GB
             </p>
           </div>
         </div>
 
-        <div className="glass rounded-[2rem] p-5 sm:p-6">
-          <div className="flex items-start gap-4 border-b border-border/60 pb-5">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
-              <Server className="h-5 w-5" />
+        <div className="section-block">
+          <div className="mb-4 flex items-center gap-3 border-b border-border pb-4">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/10 text-accent">
+              <Server className="h-4 w-4" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold">Systeeminformatie</h2>
-              <p className="mt-2 text-sm opacity-65">Kerninformatie over de draaiende omgeving.</p>
+              <h2 className="font-semibold">Systeeminformatie</h2>
+              <p className="text-xs text-muted">Kerninformatie over de draaiende omgeving.</p>
             </div>
           </div>
-          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-xl border border-border bg-card/30 p-3">
-              <span className="text-xs font-medium opacity-70">Hostnaam</span>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-lg border border-border bg-bg p-3">
+              <span className="text-xs font-medium text-muted">Hostnaam</span>
               <p className="mt-1 font-mono text-sm">{data?.system_info?.hostname || "-"}</p>
             </div>
-            <div className="rounded-xl border border-border bg-card/30 p-3">
-              <span className="text-xs font-medium opacity-70">Platform</span>
+            <div className="rounded-lg border border-border bg-bg p-3">
+              <span className="text-xs font-medium text-muted">Platform</span>
               <p className="mt-1 font-mono text-sm">{data?.system_info?.platform || "-"}</p>
             </div>
-            <div className="rounded-xl border border-border bg-card/30 p-3">
-              <span className="text-xs font-medium opacity-70">CPU-kernen</span>
+            <div className="rounded-lg border border-border bg-bg p-3">
+              <span className="text-xs font-medium text-muted">CPU-kernen</span>
               <p className="mt-1 font-mono text-sm">{data?.system_info?.cpu_cores || 0}</p>
             </div>
-            <div className="rounded-xl border border-border bg-card/30 p-3">
-              <span className="text-xs font-medium opacity-70">Opslagpad</span>
+            <div className="rounded-lg border border-border bg-bg p-3">
+              <span className="text-xs font-medium text-muted">Opslagpad</span>
               <p className="mt-1 truncate font-mono text-sm">{data?.system_info?.storage_path || "-"}</p>
             </div>
           </div>
@@ -980,6 +995,7 @@ export default function DashboardPage() {
           </aside>
         </div>
       </div>
+      </PageTransition>
     </LayoutShell>
   );
 }

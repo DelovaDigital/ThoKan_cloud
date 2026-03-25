@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, HardDrive, MessageSquare, RefreshCw, Search, Send, Settings2, ShieldCheck, UserPlus, Users, X } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
+import { PageTransition } from "@/components/page-transition";
 import { api } from "@/lib/api";
 
 type User = { id: string; email: string; full_name: string; is_active: boolean };
@@ -202,54 +203,50 @@ export default function AdminPage() {
 
   return (
     <LayoutShell>
+      <PageTransition>
       <div className="space-y-5">
-        <section className="glass overflow-hidden rounded-[2rem] p-5 sm:p-6">
-          <div className="grid gap-5 lg:grid-cols-[1.25fr_0.95fr] lg:items-center">
+        <section className="section-block">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/40 px-3 py-1 text-xs font-medium opacity-80">
-                <ShieldCheck className="h-3.5 w-3.5 text-accent" />
+              <div className="badge badge-accent mb-3">
+                <ShieldCheck className="mr-1 h-3 w-3" />
                 Administratie
               </div>
-              <h1 className="mt-4 text-3xl font-semibold sm:text-4xl">Admin centrum</h1>
-              <p className="mt-3 max-w-3xl text-sm opacity-70 sm:text-base">
-                Beheer gebruikers, directe opvolging en opslag vanuit dezelfde control workspace als dashboard, files en settings.
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Admin centrum</h1>
+              <p className="mt-1.5 text-sm text-muted">
+                Beheer gebruikers, direct opvolging en opslag vanuit één werkruimte.
               </p>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <button
-                  onClick={load}
-                  disabled={loading}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-                >
-                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                  {loading ? "Verversen..." : "Admingegevens verversen"}
-                </button>
-                <div className="rounded-2xl border border-border px-4 py-2.5 text-sm opacity-70">
-                  {visibleUsers.length} gefilterde gebruikers zichtbaar
-                </div>
-              </div>
             </div>
+            <button
+              onClick={load}
+              disabled={loading}
+              className="btn-secondary shrink-0"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              {loading ? "Verversen…" : "Verversen"}
+            </button>
+          </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Gebruikers</p>
-                <p className="mt-2 text-2xl font-semibold">{users.length}</p>
-                <p className="mt-1 text-sm opacity-60">Geregistreerde teamleden</p>
-              </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Actief</p>
-                <p className="mt-2 text-2xl font-semibold">{activeUsers}</p>
-                <p className="mt-1 text-sm opacity-60">Accounts momenteel actief</p>
-              </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Inactief</p>
-                <p className="mt-2 text-2xl font-semibold">{inactiveUsers}</p>
-                <p className="mt-1 text-sm opacity-60">Accounts voor opvolging</p>
-              </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Opslag</p>
-                <p className="mt-2 text-2xl font-semibold">{totalStorageMb >= 1024 ? `${(totalStorageMb / 1024).toFixed(2)} GB` : `${totalStorageMb} MB`}</p>
-                <p className="mt-1 text-sm opacity-60">Totaal gebruik gebruikers</p>
-              </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl border border-border bg-bg p-4">
+              <p className="text-xs font-medium uppercase tracking-widest text-muted">Gebruikers</p>
+              <p className="mt-2 text-2xl font-semibold tracking-tight">{users.length}</p>
+              <p className="mt-0.5 text-xs text-muted">Geregistreerde teamleden</p>
+            </div>
+            <div className="rounded-xl border border-border bg-bg p-4">
+              <p className="text-xs font-medium uppercase tracking-widest text-muted">Actief</p>
+              <p className="mt-2 text-2xl font-semibold tracking-tight">{activeUsers}</p>
+              <p className="mt-0.5 text-xs text-muted">Accounts momenteel actief</p>
+            </div>
+            <div className="rounded-xl border border-border bg-bg p-4">
+              <p className="text-xs font-medium uppercase tracking-widest text-muted">Inactief</p>
+              <p className="mt-2 text-2xl font-semibold tracking-tight">{inactiveUsers}</p>
+              <p className="mt-0.5 text-xs text-muted">Accounts voor opvolging</p>
+            </div>
+            <div className="rounded-xl border border-border bg-bg p-4">
+              <p className="text-xs font-medium uppercase tracking-widest text-muted">Opslag</p>
+              <p className="mt-2 text-2xl font-semibold tracking-tight">{totalStorageMb >= 1024 ? `${(totalStorageMb / 1024).toFixed(2)} GB` : `${totalStorageMb} MB`}</p>
+              <p className="mt-0.5 text-xs text-muted">Totaal gebruik gebruikers</p>
             </div>
           </div>
         </section>
@@ -505,6 +502,7 @@ export default function AdminPage() {
           </aside>
         </div>
       </div>
+      </PageTransition>
     </LayoutShell>
   );
 }
