@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Capacitor } from "@capacitor/core";
 import { motion, AnimatePresence } from "framer-motion";
@@ -283,8 +284,8 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                 transition={{ duration: 0.15 }}
                 className="flex items-center gap-2.5 overflow-hidden"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/10">
-                  <div className="h-4 w-4 rounded-sm bg-accent" />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-bg">
+                  <Image src="/Logo.png" alt="ThoKan" width={26} height={26} className="h-6 w-6 object-contain" priority />
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold leading-tight">ThoKan</p>
@@ -298,9 +299,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
                 transition={{ duration: 0.15 }}
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10"
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-bg"
               >
-                <div className="h-4 w-4 rounded-sm bg-accent" />
+                <Image src="/Logo.png" alt="ThoKan" width={20} height={20} className="h-5 w-5 object-contain" priority />
               </motion.div>
             )}
           </AnimatePresence>

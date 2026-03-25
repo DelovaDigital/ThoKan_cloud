@@ -52,6 +52,7 @@ export default function AdminPage() {
   const [userSearch, setUserSearch] = useState("");
   const [userSort, setUserSort] = useState<"name" | "email">("name");
   const [selectedChatUser, setSelectedChatUser] = useState<User | null>(null);
+  const [showChatModal, setShowChatModal] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatDraft, setChatDraft] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
@@ -131,6 +132,7 @@ export default function AdminPage() {
 
   async function openChat(user: User) {
     setSelectedChatUser(user);
+    setShowChatModal(true);
     setChatLoading(true);
     setError("");
     try {
@@ -432,7 +434,7 @@ export default function AdminPage() {
             </ul>
           </section>
 
-          <aside className="section-block xl:sticky xl:top-[96px] xl:h-fit">
+          <aside className="hidden section-block xl:sticky xl:top-[96px] xl:h-fit">
             <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-5">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-45">Detailkaart</p>
@@ -495,6 +497,70 @@ export default function AdminPage() {
             )}
           </aside>
         </div>
+
+        {showChatModal && selectedChatUser && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
+            onClick={() => {
+              setShowChatModal(false);
+              setSelectedChatUser(null);
+            }}
+          >
+            <div
+              className="section-block max-h-[90vh] w-full max-w-4xl overflow-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-4">
+                <div>
+                  <h3 className="text-lg font-semibold">Chat met {selectedChatUser.full_name}</h3>
+                  <p className="mt-1 text-sm text-muted">{selectedChatUser.email}</p>
+                </div>
+                <button
+                  className="btn-secondary px-3 py-2"
+                  onClick={() => {
+                    setShowChatModal(false);
+                    setSelectedChatUser(null);
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                  Sluiten
+                </button>
+              </div>
+
+              <div className="mt-4 max-h-[52vh] space-y-3 overflow-y-auto rounded-xl border border-border bg-bg p-4">
+                {chatLoading ? (
+                  <p className="text-sm opacity-70">Chat laden...</p>
+                ) : chatMessages.length === 0 ? (
+                  <p className="text-sm opacity-70">Nog geen berichten.</p>
+                ) : (
+                  chatMessages.map((message) => (
+                    <div key={message.id} className="rounded-xl border border-border bg-card p-3">
+                      <p className="text-sm">{message.body}</p>
+                      <p className="mt-2 text-xs text-muted">{formatDateLabel(message.created_at)}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="mt-4 space-y-3 rounded-xl border border-border bg-bg p-4">
+                <textarea
+                  value={chatDraft}
+                  onChange={(e) => setChatDraft(e.target.value)}
+                  placeholder="Typ een bericht"
+                  className="field-input min-h-[120px]"
+                />
+                <button
+                  onClick={() => void sendChatMessage()}
+                  disabled={chatSending || !chatDraft.trim()}
+                  className="btn-primary"
+                >
+                  <Send className="h-4 w-4" />
+                  {chatSending ? "Verzenden..." : "Verzend"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       </PageTransition>
     </LayoutShell>

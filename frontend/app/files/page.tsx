@@ -235,6 +235,7 @@ export default function FilesPage() {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [newFolder, setNewFolder] = useState("");
   const [previewFile, setPreviewFile] = useState<FileRow | null>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewText, setPreviewText] = useState("");
   const [previewOfficeUrl, setPreviewOfficeUrl] = useState<string | null>(null);
@@ -307,18 +308,10 @@ export default function FilesPage() {
   const currentFolder = useMemo(() => folders.find((f) => f.id === currentFolderId), [folders, currentFolderId]);
   const currentPath = currentFolder?.path || "/";
   const breadcrumbs = useMemo(() => currentPath.split("/").filter(Boolean), [currentPath]);
-  const rootFolders = useMemo(() => folders.filter((f) => f.parent_id === null), [folders]);
 
   const visibleFolders = useMemo(() => folders.filter((f) => f.parent_id === currentFolderId), [folders, currentFolderId]);
   const visibleFiles = useMemo(() => files.filter((f) => f.folder_id === currentFolderId), [files, currentFolderId]);
   const folderStorageBytes = useMemo(() => visibleFiles.reduce((sum, file) => sum + file.size_bytes, 0), [visibleFiles]);
-  const quickFolders = useMemo(() => {
-    if (!currentFolderId) return rootFolders;
-    const aroundCurrent = folders.filter((f) => f.parent_id === currentFolderId);
-    const currentParent = folders.filter((f) => f.parent_id === (currentFolder?.parent_id ?? null));
-    const merged = [...rootFolders, ...currentParent, ...aroundCurrent];
-    return merged.filter((folder, index) => merged.findIndex((candidate) => candidate.id === folder.id) === index).slice(0, 24);
-  }, [currentFolderId, rootFolders, folders, currentFolder?.parent_id]);
 
   const filteredFiles = useMemo(() => {
     return visibleFiles
@@ -433,6 +426,7 @@ export default function FilesPage() {
     setPreviewOfficeUrl(null);
     setOfficePreviewFailed(false);
     setOpenActionFileId(null);
+    setShowPreviewModal(true);
     setUserError("");
     setUserNotice(`Preview wordt geopend voor ${file.name}...`);
 
@@ -488,6 +482,7 @@ export default function FilesPage() {
     setOfficePreviewFailed(false);
     setPreviewError("");
     setPreviewFile(null);
+    setShowPreviewModal(false);
   }
 
   function navigateUp() {
@@ -554,32 +549,20 @@ export default function FilesPage() {
 
         <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
           <section className="section-block">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.14em] opacity-65">Snelmappen</h2>
-            <div className="mt-3 space-y-1.5">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.14em] opacity-65">Navigatie</h2>
+            <div className="mt-3 space-y-2">
               <button
                 onClick={() => setCurrentFolderId(null)}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition ${
+                className={`flex w-full items-center justify-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                   currentFolderId === null ? "bg-accent text-white" : "hover:bg-card/70"
                 }`}
               >
                 <HardDrive className="h-4 w-4 shrink-0 opacity-80" />
                 Mijn bestanden
               </button>
-              {quickFolders.map((folder) => (
-                <button
-                  key={folder.id}
-                  onClick={() => setCurrentFolderId(folder.id)}
-                  className={`flex w-full items-center gap-2.5 truncate rounded-lg px-3 py-2.5 text-left text-sm transition ${
-                    currentFolderId === folder.id ? "bg-accent/15 font-medium text-accent" : "hover:bg-card/70"
-                  }`}
-                  title={folder.path}
-                >
-                  <Folder className={`h-4 w-4 shrink-0 ${
-                    currentFolderId === folder.id ? "text-accent" : "text-amber-500"
-                  }`} />
-                  {folder.name}
-                </button>
-              ))}
+              <button onClick={navigateUp} disabled={!currentFolder} className="btn-secondary w-full disabled:opacity-50">
+                Niveau omhoog
+              </button>
             </div>
 
             <div className="mt-4 border-t border-border pt-4">
@@ -664,7 +647,7 @@ export default function FilesPage() {
           </div>
         </section>
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_380px]">
+        <div className="grid gap-4 xl:grid-cols-1">
           <section className="section-block">
             <div className="mb-5 flex items-center justify-between gap-3 border-b border-border/60 pb-5">
               <div>
@@ -814,7 +797,7 @@ export default function FilesPage() {
             </div>
           </section>
 
-          <aside className="section-block xl:sticky xl:top-[96px] xl:h-fit">
+          <aside className="hidden section-block xl:sticky xl:top-[96px] xl:h-fit">
             <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-5">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-45">Detailkaart</p>
@@ -951,6 +934,110 @@ export default function FilesPage() {
             )}
           </aside>
         </div>
+
+        {showPreviewModal && previewFile && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
+            onClick={closePreview}
+          >
+            <div
+              className="section-block max-h-[92vh] w-full max-w-6xl overflow-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-4">
+                <div className="flex items-start gap-3">
+                  <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${selectedPreviewSurface}`}>
+                    <SelectedPreviewIcon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold">{previewFile.name}</h2>
+                    <p className="mt-1 text-xs text-muted">{previewFile.mime_type || "Onbekend bestandstype"}</p>
+                    <p className="mt-1 text-xs text-muted">{formatBytes(previewFile.size_bytes)} • {formatDateLabel(previewFile.created_at)}</p>
+                  </div>
+                </div>
+                <button className="btn-secondary px-3 py-2" onClick={closePreview}>
+                  <X className="h-4 w-4" />
+                  Sluiten
+                </button>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  className="btn-primary px-3 py-2"
+                  onClick={() => void downloadFile(previewFile)}
+                >
+                  <Download className="h-4 w-4" />
+                  Download
+                </button>
+                <button
+                  className="btn-secondary px-3 py-2"
+                  onClick={() => void openPreview(previewFile)}
+                >
+                  <Eye className="h-4 w-4" />
+                  Refresh preview
+                </button>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-border bg-card/20 p-4">
+                {previewLoading && <p className="text-sm opacity-70">Preview laden...</p>}
+                {!previewLoading && previewError && <p className="text-sm text-red-400">{previewError}</p>}
+
+                {!previewLoading && !previewError && previewUrl && selectedPreviewKind === "image" && (
+                  <img src={previewUrl} alt={previewFile.name} className="mx-auto max-h-[70vh] w-auto rounded-xl" />
+                )}
+
+                {!previewLoading && !previewError && previewUrl && selectedPreviewKind === "video" && (
+                  <video controls className="mx-auto max-h-[70vh] w-full rounded-xl" src={previewUrl} />
+                )}
+
+                {!previewLoading && !previewError && previewUrl && selectedPreviewKind === "audio" && (
+                  <audio controls className="w-full" src={previewUrl} />
+                )}
+
+                {!previewLoading && !previewError && previewUrl && selectedPreviewKind === "pdf" && (
+                  <iframe src={previewUrl} className="h-[70vh] w-full rounded-xl" title={previewFile.name} />
+                )}
+
+                {!previewLoading && !previewError && previewText && isTextLikeFile(previewFile) && (
+                  <div className="max-h-[70vh] overflow-auto rounded-xl bg-card/45">
+                    <pre className="whitespace-pre-wrap p-4 font-mono text-xs leading-relaxed">{previewText}</pre>
+                    {previewText.length === 200000 && (
+                      <p className="border-t border-border p-3 text-xs opacity-60">Bestand is te groot. Eerste 200KB wordt getoond.</p>
+                    )}
+                  </div>
+                )}
+
+                {!previewLoading && !previewError && previewOfficeUrl && isOfficeFile(previewFile) && (
+                  <div className="space-y-3">
+                    <p className="text-xs opacity-70">
+                      Office-preview gebruikt een externe kijker. Als je een fout ziet, controleer of je server publiek bereikbaar is.
+                    </p>
+                    {officePreviewFailed && (
+                      <p className="text-sm text-red-300">Office-kijker kon niet laden. Gebruik download als fallback.</p>
+                    )}
+                    <iframe
+                      src={previewOfficeUrl}
+                      className="h-[70vh] w-full rounded-xl"
+                      title={previewFile.name}
+                      onError={() => {
+                        setOfficePreviewFailed(true);
+                        setUserError("Office-preview kon niet laden. Download wordt aanbevolen.");
+                        setUserNotice("");
+                      }}
+                    />
+                  </div>
+                )}
+
+                {!previewLoading && !previewError && !previewText && previewUrl && selectedPreviewKind === "other" && (
+                  <PreviewPlaceholder
+                    title="Beperkte web-preview"
+                    description="Dit bestandstype heeft nog geen rijke inline viewer. Gebruik download om lokaal te openen."
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       </PageTransition>
     </LayoutShell>

@@ -29,7 +29,7 @@ UPDATE_CONFIG_KEY = "system_update_config"
 DEFAULT_GITHUB_UPDATE_REPO = "AlessioD200/ThoKan_cloud"
 DEFAULT_GITHUB_UPDATE_BRANCH = "update-channel"
 TARGET_INSTALL_ROOT = Path("/opt/thokan-cloud")
-PRODUCTION_DOCKER_UPDATE_COMMAND = "if [ -f docker-compose.prod.yml ]; then if docker compose version >/dev/null 2>&1; then docker compose -f docker-compose.prod.yml up -d --build; elif command -v docker-compose >/dev/null 2>&1; then docker-compose -f docker-compose.prod.yml up -d --build; else echo '[ThoKan update] docker compose not found'; exit 1; fi; elif [ -f compose.yml ] || [ -f docker-compose.yml ]; then if docker compose version >/dev/null 2>&1; then docker compose up -d --build; elif command -v docker-compose >/dev/null 2>&1; then docker-compose up -d --build; else echo '[ThoKan update] docker compose not found'; exit 1; fi; else echo '[ThoKan update] no compose file found'; exit 1; fi"
+PRODUCTION_DOCKER_UPDATE_COMMAND = "if [ -f docker-compose.prod.yml ]; then USE_PROD=1; elif [ -f compose.yml ] || [ -f docker-compose.yml ]; then USE_PROD=0; else echo '[ThoKan update] no compose file found'; exit 1; fi; if docker compose version >/dev/null 2>&1; then if [ \"$USE_PROD\" = \"1\" ]; then docker compose -f docker-compose.prod.yml up -d --build; else docker compose up -d --build; fi; elif command -v docker-compose >/dev/null 2>&1; then if [ \"$USE_PROD\" = \"1\" ]; then docker-compose -f docker-compose.prod.yml up -d --build; else docker-compose up -d --build; fi; else echo '[ThoKan update] docker compose not found, falling back to container restarts'; (docker ps --format '{{.Names}}' | grep -E 'thokan_cloud-(frontend|backend|nginx|postgres)-1' | xargs -r docker restart) || true; fi"
 NOTES_CACHE_KEY = "update_notes_cache"
 VERSION_CACHE_KEY = "update_version_cache"
 INSTALLED_UPDATE_KEY = "system_update_installed"
@@ -214,6 +214,30 @@ def _normalize_version_for_compare(value: str | None) -> str | None:
     if "+" in normalized:
         normalized = normalized.split("+", 1)[0]
     return normalized or None
+
+
+def _detect_os_release() -> str:
+    try:
+        os_release = platform.freedesktop_os_release()
+        pretty = str(os_release.get("PRETTY_NAME") or "").strip()
+        if pretty:
+            return pretty
+    except Exception:
+        pass
+
+    for path in (Path("/etc/os-release"), Path("/usr/lib/os-release")):
+        try:
+            if not path.exists():
+                continue
+            for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                if line.startswith("PRETTY_NAME="):
+                    value = line.split("=", 1)[1].strip().strip('"')
+                    if value:
+                        return value
+        except Exception:
+            continue
+
+    return platform.release()
 
 
 def _updates_dir() -> Path:
@@ -631,7 +655,7 @@ def get_system_info(
         hostname=platform.node(),
         platform=platform.platform(),
         architecture=platform.machine(),
-        os_release=platform.release(),
+        os_release=_detect_os_release(),
         cpu_cores=os.cpu_count() or 1,
         python_version=platform.python_version(),
         app_version=get_runtime_version(default="unknown"),
