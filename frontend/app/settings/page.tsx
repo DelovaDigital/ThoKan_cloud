@@ -43,8 +43,12 @@ type MountPoint = {
 type SystemInfo = {
   hostname: string;
   platform: string;
+  architecture: string;
+  os_release: string;
   cpu_cores: number;
   python_version: string;
+  app_version: string;
+  install_root: string;
   storage: StorageInfo;
   available_mounts: MountPoint[];
 };
@@ -1043,6 +1047,22 @@ export default function SettingsPage() {
               <span className="text-xs font-medium opacity-70">Python-versie</span>
               <p className="mt-1 font-mono text-sm">{info?.python_version || "-"}</p>
             </div>
+            <div className="rounded-xl border border-border bg-card/30 p-3">
+              <span className="text-xs font-medium opacity-70">ThoKan versie</span>
+              <p className="mt-1 font-mono text-sm">{info?.app_version || "-"}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card/30 p-3">
+              <span className="text-xs font-medium opacity-70">Architectuur</span>
+              <p className="mt-1 font-mono text-sm">{info?.architecture || "-"}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card/30 p-3">
+              <span className="text-xs font-medium opacity-70">OS release</span>
+              <p className="mt-1 font-mono text-sm">{info?.os_release || "-"}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card/30 p-3">
+              <span className="text-xs font-medium opacity-70">Installatiemap</span>
+              <p className="mt-1 truncate font-mono text-sm">{info?.install_root || "-"}</p>
+            </div>
           </div>
         </SectionShell>
         )}
@@ -1706,7 +1726,89 @@ Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
                 Git pull
               </button>
             </div>
+            <div className="inline-flex items-center rounded-2xl border border-border bg-card/30 p-1">
+              <button
+                onClick={() => setUpdateChannel("stable")}
+                className={`rounded-xl px-3 py-1.5 text-sm transition ${updateChannel === "stable" ? "bg-accent text-white" : "hover:bg-card/60"}`}
+              >
+                Stable
+              </button>
+              <button
+                onClick={() => setUpdateChannel("beta")}
+                className={`rounded-xl px-3 py-1.5 text-sm transition ${updateChannel === "beta" ? "bg-accent text-white" : "hover:bg-card/60"}`}
+              >
+                Beta
+              </button>
+            </div>
+            <label className="inline-flex items-center gap-2 rounded-xl border border-border bg-card/30 px-3 py-2 text-sm">
+              <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
+              Dry run (geen wijzigingen)
+            </label>
           </div>
+
+          {updateConfig && (
+            <div className="mt-4 rounded-xl border border-border bg-card/25 p-4">
+              <p className="text-sm font-medium">Automatische update-instellingen</p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <label className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={updateConfig.auto_check_updates}
+                    onChange={(e) => setUpdateConfig((prev) => (prev ? { ...prev, auto_check_updates: e.target.checked } : prev))}
+                  />
+                  Auto-check updates
+                </label>
+                <label className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={updateConfig.auto_install_nightly}
+                    onChange={(e) => setUpdateConfig((prev) => (prev ? { ...prev, auto_install_nightly: e.target.checked } : prev))}
+                  />
+                  Nachtelijke auto-installatie
+                </label>
+                <label className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={updateConfig.auto_rebuild_docker}
+                    onChange={(e) => setUpdateConfig((prev) => (prev ? { ...prev, auto_rebuild_docker: e.target.checked } : prev))}
+                  />
+                  Docker herstart na update
+                </label>
+                <label className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={updateConfig.auto_update_ubuntu}
+                    onChange={(e) => setUpdateConfig((prev) => (prev ? { ...prev, auto_update_ubuntu: e.target.checked } : prev))}
+                  />
+                  Ubuntu pakketten bijwerken
+                </label>
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-[220px_1fr]">
+                <div>
+                  <label className="block text-sm font-medium">Nachtuur (0-23)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={23}
+                    className="field-input mt-2"
+                    value={updateConfig.nightly_install_hour}
+                    onChange={(e) => {
+                      const value = Math.max(0, Math.min(23, Number(e.target.value) || 0));
+                      setUpdateConfig((prev) => (prev ? { ...prev, nightly_install_hour: value } : prev));
+                    }}
+                  />
+                </div>
+                <div className="rounded-xl border border-border bg-bg p-3 text-sm text-muted">
+                  Gepland venster: {formatNightlyWindow(updateConfig.nightly_install_hour)}
+                </div>
+              </div>
+              <div className="mt-3">
+                <button onClick={saveUpdateConfig} disabled={updateBusy} className="btn-secondary">
+                  {updateBusy ? "Opslaan..." : "Update-instellingen opslaan"}
+                </button>
+              </div>
+            </div>
+          )}
 
           {updateSourceMode === "git" && (
             <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -1729,6 +1831,39 @@ Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
                   onChange={(e) => setGitBranch(e.target.value)}
                   placeholder="main"
                 />
+              </div>
+            </div>
+          )}
+
+          {updateSourceMode === "cloud" && (
+            <div className="mt-3 rounded-xl border border-border bg-card/25 p-4">
+              <p className="text-sm font-medium">Cloud pakketbeheer</p>
+              <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
+                <select
+                  value={selectedPackage}
+                  onChange={(e) => setSelectedPackage(e.target.value)}
+                  className="field-input"
+                >
+                  {channelPackages.map((pkg) => (
+                    <option key={pkg.name} value={pkg.name}>
+                      {pkg.name}
+                    </option>
+                  ))}
+                </select>
+                <button onClick={applyUpdate} disabled={!selectedPackage || updateBusy} className="btn-primary">
+                  {updateBusy ? "Installeren..." : "Geselecteerd pakket installeren"}
+                </button>
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
+                <input
+                  type="file"
+                  accept=".zip,.tar,.tar.gz,.tgz"
+                  className="field-input"
+                  onChange={(e) => setUpdateFile(e.target.files?.[0] ?? null)}
+                />
+                <button onClick={uploadUpdatePackage} disabled={!updateFile || updateBusy} className="btn-secondary">
+                  Upload pakket
+                </button>
               </div>
             </div>
           )}
@@ -1762,6 +1897,20 @@ Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
             )}
           </div>
 
+          <div className="mt-3 rounded-xl border border-border bg-card/25 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={() => void loadAptStatus()} className="btn-secondary" disabled={aptBusy}>
+                APT status verversen
+              </button>
+              <button onClick={applyAptUpgrade} className="btn-secondary" disabled={aptBusy || updateBusy}>
+                {aptBusy ? "Bezig..." : "APT upgrade uitvoeren"}
+              </button>
+              <span className="rounded-full border border-border bg-bg px-3 py-1 text-xs text-muted">
+                {aptStatus ? `${aptStatus.upgradable} upgradable` : "APT status onbekend"}
+              </span>
+            </div>
+          </div>
+
           {updatePrompt?.notes && (
             <div className="mt-4 rounded-xl border border-border bg-card/40 p-3">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wider opacity-60">Releasenotes</p>
@@ -1776,6 +1925,24 @@ Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
           {(updateBusy || updateStatus?.state === "running") && (
             <div className="mt-4 rounded-xl border border-border bg-card/30 p-3 text-sm">
               <p className="opacity-70">{updateStatus?.progress_step || "Update bezig..."}</p>
+            </div>
+          )}
+
+          {updateStatus && (
+            <div className="mt-4 rounded-xl border border-border bg-card/25 p-4 text-sm">
+              <div className="grid gap-2 md:grid-cols-2">
+                <p>Laatste pakket: <span className="font-mono">{updateStatus.package_name || updateStatus.installed_package_name || "-"}</span></p>
+                <p>Exit code: <span className="font-mono">{updateStatus.return_code ?? "-"}</span></p>
+                <p>Build datum: <span className="font-mono">{updateStatus.installed_build_date || getBuildDateFromPackageName(updateStatus.installed_package_name) || "-"}</span></p>
+                <p>Klaar op: <span className="font-mono">{updateStatus.finished_at || "-"}</span></p>
+              </div>
+              {(updateStatus.stderr || updateStatus.stdout) && (
+                <details className="mt-3">
+                  <summary className="cursor-pointer text-sm font-medium">Laatste update logs</summary>
+                  {updateStatus.stderr && <pre className="mt-2 max-h-44 overflow-auto rounded-lg border border-border bg-bg p-3 text-xs text-red-300">{updateStatus.stderr}</pre>}
+                  {updateStatus.stdout && <pre className="mt-2 max-h-44 overflow-auto rounded-lg border border-border bg-bg p-3 text-xs">{updateStatus.stdout}</pre>}
+                </details>
+              )}
             </div>
           )}
         </SectionShell>
