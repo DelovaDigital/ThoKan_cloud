@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
+import { PageTransition } from "@/components/page-transition";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { api, apiRaw, getApiBase } from "@/lib/api";
 
@@ -496,6 +497,7 @@ export default function FilesPage() {
 
   return (
     <LayoutShell>
+      <PageTransition>
       <div className="space-y-5">
         <section className="section-block">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -929,6 +931,7 @@ export default function FilesPage() {
           </aside>
         </div>
       </div>
+      </PageTransition>
     </LayoutShell>
   );
 }

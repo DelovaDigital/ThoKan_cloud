@@ -1,7 +1,21 @@
 import type { Metadata } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import { PWARegister } from "@/components/pwa-register";
 import { CapacitorProviders } from "@/components/capacitor-providers";
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "ThoKan Cloud",
@@ -21,11 +35,22 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="nl">
-      <body>
+    <html lang="nl" suppressHydrationWarning>
+      <body className={`${inter.variable} ${jetbrainsMono.variable}`}>
         <PWARegister />
         <CapacitorProviders />
         {children}
+        <Toaster
+          position="bottom-right"
+          toastOptions={{
+            classNames: {
+              toast: "!bg-card !border-border !text-fg !rounded-xl !shadow-md",
+              description: "!text-muted",
+              success: "!text-success",
+              error: "!text-destructive",
+            },
+          }}
+        />
       </body>
     </html>
   );

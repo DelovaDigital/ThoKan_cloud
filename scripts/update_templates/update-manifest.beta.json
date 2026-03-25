@@ -1,6 +1,6 @@
 {
-  "version": "1.0.10",
+  "version": "1.0.12",
   "channel": "beta",
-  "package_url": "https://updates.your-domain.com/beta/thokan-update-1.0.10.tar.gz",
+  "package_url": "https://updates.your-domain.com/beta/thokan-update-1.0.12.tar.gz",
   "notes": "Preview release for testing"
 }

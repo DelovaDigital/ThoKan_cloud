@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, Bell, BellRing, FileText, MessageSquareText, PackageCheck, RefreshCw, ShoppingBag, Star, UserRound } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
+import { PageTransition } from "@/components/page-transition";
 import { api } from "@/lib/api";
 import {
   browserNotificationsSupported,
@@ -347,60 +348,61 @@ export default function ShopifyPage() {
 
   return (
     <LayoutShell>
+      <PageTransition>
       <div className="space-y-5">
-        <section className="glass overflow-hidden rounded-[2rem] p-5 sm:p-6">
-          <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
+        <section className="section-block">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/40 px-3 py-1 text-xs font-medium opacity-80">
-                <MessageSquareText className="h-3.5 w-3.5 text-accent" />
+              <div className="badge badge-accent mb-3">
+                <MessageSquareText className="mr-1 h-3 w-3" />
                 Commerce cockpit
               </div>
-              <h1 className="mt-4 text-3xl font-semibold sm:text-4xl">Shopify, chat en fulfilment in één cockpit</h1>
-              <p className="mt-3 max-w-3xl text-sm opacity-70 sm:text-base">
-                Deze workspace bundelt websitechat, storefront signalen en fulfilmentcontext in één plek. Shopify Inbox zelf is nog niet rechtstreeks beschikbaar via de huidige Admin API-route, dus websitechat loopt via de bridge en orderactiviteit via de bestaande eventfeed.
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Shopify & Fulfilment</h1>
+              <p className="mt-1.5 text-sm text-muted">
+                Websitechat, orderactiviteit en Gelato-fulfilment in één werkruimte.
               </p>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <button
-                  onClick={() => void refreshWorkspace(true)}
-                  disabled={refreshing}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-                >
-                  <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-                  {refreshing ? "Verversen..." : "Werkruimte verversen"}
-                </button>
-                {browserNotificationsSupported() && notificationPermission !== "granted" && (
-                  <button
-                    onClick={() => void enableNotifications()}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-2.5 text-sm font-medium transition hover:bg-card/70"
-                  >
-                    <Bell className="h-4 w-4" />
-                    Browsermeldingen inschakelen
-                  </button>
-                )}
-              </div>
             </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => void refreshWorkspace(true)}
+                disabled={refreshing}
+                className="btn-secondary"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                {refreshing ? "Verversen…" : "Verversen"}
+              </button>
+              {browserNotificationsSupported() && notificationPermission !== "granted" && (
+                <button
+                  onClick={() => void enableNotifications()}
+                  className="btn-secondary"
+                >
+                  <Bell className="h-4 w-4" />
+                  Meldingen
+                </button>
+              )}
+            </div>
+          </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Chats</p>
-                <p className="mt-2 text-2xl font-semibold">{chatConversations.length}</p>
-                <p className="mt-1 text-sm opacity-60">Bekende websiteconversaties</p>
-              </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Ongelezen</p>
-                <p className="mt-2 text-2xl font-semibold">{unreadMessages}</p>
-                <p className="mt-1 text-sm opacity-60">Nieuwe chatberichten</p>
-              </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Orderevents</p>
-                <p className="mt-2 text-2xl font-semibold">{events.length}</p>
-                <p className="mt-1 text-sm opacity-60">In de huidige eventfeed</p>
-              </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Orders</p>
-                <p className="mt-2 text-2xl font-semibold">{ordersChecked}</p>
-                <p className="mt-1 text-sm opacity-60">Bestellingen gecontroleerd</p>
-              </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl border border-border bg-bg p-4">
+              <p className="text-xs font-medium uppercase tracking-widest text-muted">Chats</p>
+              <p className="mt-2 text-2xl font-semibold tracking-tight">{chatConversations.length}</p>
+              <p className="mt-0.5 text-xs text-muted">Bekende websiteconversaties</p>
+            </div>
+            <div className="rounded-xl border border-border bg-bg p-4">
+              <p className="text-xs font-medium uppercase tracking-widest text-muted">Ongelezen</p>
+              <p className="mt-2 text-2xl font-semibold tracking-tight">{unreadMessages}</p>
+              <p className="mt-0.5 text-xs text-muted">Nieuwe chatberichten</p>
+            </div>
+            <div className="rounded-xl border border-border bg-bg p-4">
+              <p className="text-xs font-medium uppercase tracking-widest text-muted">Orderevents</p>
+              <p className="mt-2 text-2xl font-semibold tracking-tight">{events.length}</p>
+              <p className="mt-0.5 text-xs text-muted">In de huidige eventfeed</p>
+            </div>
+            <div className="rounded-xl border border-border bg-bg p-4">
+              <p className="text-xs font-medium uppercase tracking-widest text-muted">Orders</p>
+              <p className="mt-2 text-2xl font-semibold tracking-tight">{ordersChecked}</p>
+              <p className="mt-0.5 text-xs text-muted">Bestellingen gecontroleerd</p>
             </div>
           </div>
         </section>
@@ -714,6 +716,7 @@ export default function ShopifyPage() {
           </div>
         </section>
       </div>
+      </PageTransition>
     </LayoutShell>
   );
 }

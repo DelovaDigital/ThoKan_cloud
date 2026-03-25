@@ -133,7 +133,13 @@ export function LoginPage() {
         </div>
 
         {error && (
-          <div className={`border p-3 text-sm ${noticeType === "success" ? "border-green-500/50 bg-green-500/10 text-green-600 dark:text-green-300" : "border-red-500/50 bg-red-500/10 text-red-500"}`}>
+          <div
+            className={`rounded-lg border p-3 text-sm ${
+              noticeType === "success"
+                ? "border-success/30 bg-success/10 text-success"
+                : "border-destructive/30 bg-destructive/10 text-destructive"
+            }`}
+          >
             {error}
           </div>
         )}
@@ -143,8 +149,17 @@ export function LoginPage() {
           disabled={loading}
           className="btn-primary w-full"
         >
-          {loading ? "Inloggen..." : "Inloggen"}
-          {!loading && <ArrowRight className="h-4 w-4" />}
+          {loading ? (
+            <span className="flex items-center gap-2">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              Inloggen…
+            </span>
+          ) : (
+            <>
+              Inloggen
+              <ArrowRight className="h-4 w-4" />
+            </>
+          )}
         </button>
       </form>
     </AuthShell>

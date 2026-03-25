@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
+import { PageTransition } from "@/components/page-transition";
 import { api, apiRaw } from "@/lib/api";
 
 type StorageInfo = {
@@ -938,9 +939,10 @@ export default function SettingsPage() {
 
   return (
     <LayoutShell>
+      <PageTransition>
       <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="glass h-fit rounded-[1.5rem] p-3 lg:sticky lg:top-6">
-          <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-[0.18em] opacity-50">Instellingen</p>
+        <aside className="section-block h-fit lg:sticky lg:top-6">
+          <p className="px-1 pb-2 text-xs font-medium uppercase tracking-widest text-muted">Instellingen</p>
           <div className="space-y-1">
             <button
               onClick={() => {
@@ -1775,6 +1777,7 @@ Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
 
         </div>
       </div>
+      </PageTransition>
     </LayoutShell>
   );
 }

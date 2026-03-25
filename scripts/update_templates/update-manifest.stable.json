@@ -1,6 +1,6 @@
 {
-  "version": "1.0.10",
+  "version": "1.0.12",
   "channel": "stable",
-  "package_url": "https://updates.your-domain.com/stable/thokan-update-1.0.10.tar.gz",
+  "package_url": "https://updates.your-domain.com/stable/thokan-update-1.0.12.tar.gz",
   "notes": "Production-ready release"
 }

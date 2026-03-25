@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
+import { PageTransition } from "@/components/page-transition";
 import { api } from "@/lib/api";
 import {
   browserNotificationsSupported,
@@ -457,6 +458,7 @@ export default function MailPage() {
 
   return (
     <LayoutShell>
+      <PageTransition>
       <div className="space-y-5">
         <section className="section-block">
           <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
@@ -910,7 +912,7 @@ export default function MailPage() {
         )}
 
       </div>
+      </PageTransition>
     </LayoutShell>
   );
 }
-
