@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     apns_use_sandbox: bool = True
     mail_push_enabled: bool = True
     mail_push_poll_seconds: int = 5
+    shopify_push_enabled: bool = True
+    shopify_push_poll_seconds: int = 15
+    shopify_push_target_role: str = "admin"
 
     rate_limit_per_minute: int = 120
     cors_origins: str = "http://localhost:3000,capacitor://localhost,ionic://localhost"

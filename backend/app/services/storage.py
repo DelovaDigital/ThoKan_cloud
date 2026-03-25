@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import boto3
@@ -77,13 +78,28 @@ def get_local_storage_roots(configured_root: str | None = None) -> list[Path]:
 
     if root.is_absolute():
         _add(root)
-        return candidates
+    else:
+        _add(Path.cwd() / root)
+        _add(app_root / root)
+        if root.name:
+            _add(Path("/app") / root.name)
+            _add(Path("/host_repo") / root.name)
 
-    _add(Path.cwd() / root)
-    _add(app_root / root)
-    if root.name:
-        _add(Path("/app") / root.name)
-        _add(Path("/host_repo") / root.name)
+    # Cloud/production fallbacks for installs where compose/env paths changed
+    storage_env = os.environ.get("STORAGE_HOST_PATH")
+    if storage_env:
+        _add(Path(storage_env))
+
+    install_root_env = os.environ.get("THOKAN_TARGET_ROOT") or os.environ.get("THOKAN_INSTALL_ROOT")
+    if install_root_env:
+        _add(Path(install_root_env) / "storage")
+
+    host_repo_env = os.environ.get("THOKAN_HOST_REPO_PATH")
+    if host_repo_env:
+        _add(Path(host_repo_env) / "storage")
+
+    _add(Path("/opt/thokan-cloud/storage"))
+    _add(Path("/home/thokan/ThoKan_cloud/storage"))
 
     return candidates
 

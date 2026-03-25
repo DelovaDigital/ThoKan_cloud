@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.deps import get_current_user, require_role
+from app.deps import get_current_user, get_user_roles, require_role
 from app.models import SystemSetting, User
 
 router = APIRouter()
@@ -93,6 +93,41 @@ async def _send_apns(device_token: str, title: str, body: str, user_info: dict[s
     if response.status_code >= 400:
         detail = response.text or "APNs request failed"
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"APNs error: {detail}")
+
+
+async def push_to_users(
+    db: Session,
+    title: str,
+    body: str,
+    user_info: dict[str, Any] | None = None,
+    *,
+    role_name: str | None = None,
+) -> None:
+    """Send an APNs alert to active users with a registered device token."""
+    active_users = db.query(User).filter(User.is_active.is_(True)).all()
+    for user in active_users:
+        if role_name and role_name not in get_user_roles(db, user.id):
+            continue
+        tokens = _load_tokens(db, str(user.id))
+        for token in tokens:
+            try:
+                await _send_apns(token, title, body, user_info=user_info)
+            except Exception:
+                continue
+
+
+async def push_to_all_users(db: Session, title: str, body: str, user_info: dict[str, Any] | None = None) -> None:
+    await push_to_users(db, title, body, user_info)
+
+
+async def push_to_role_users(
+    db: Session,
+    role_name: str,
+    title: str,
+    body: str,
+    user_info: dict[str, Any] | None = None,
+) -> None:
+    await push_to_users(db, title, body, user_info, role_name=role_name)
 
 
 @router.get("/device-token")

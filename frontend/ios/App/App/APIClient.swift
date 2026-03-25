@@ -95,6 +95,38 @@ class APIClient: NSObject {
         let url = URL(string: "\(baseURL)/shopify/chat/feed?limit_orders=\(limitOrders)&limit_events=\(limitEvents)")!
         return try await request(URLRequest(url: url))
     }
+
+    func fetchShopifyOrders(limit: Int = 20, status: String = "any") async throws -> ShopifyOrdersResponse {
+        let url = URL(string: "\(baseURL)/shopify/orders?limit=\(limit)&status=\(status)")!
+        return try await request(URLRequest(url: url))
+    }
+
+    func fetchShopifyOrder(orderId: String) async throws -> ShopifyOrderDetail {
+        let url = URL(string: "\(baseURL)/shopify/orders/\(orderId)")!
+        return try await request(URLRequest(url: url))
+    }
+
+    func fetchShopifyOrderEvents(orderId: String) async throws -> ShopifyOrderEventsResponse {
+        let url = URL(string: "\(baseURL)/shopify/orders/\(orderId)/events")!
+        return try await request(URLRequest(url: url))
+    }
+
+    func fetchShopifyWebsiteChatInbox() async throws -> ShopifyWebsiteChatInboxResponse {
+        let url = URL(string: "\(baseURL)/shopify/website-chat/inbox")!
+        return try await request(URLRequest(url: url))
+    }
+
+    func fetchShopifyWebsiteChatConversation(conversationId: String) async throws -> ShopifyWebsiteChatConversation {
+        let url = URL(string: "\(baseURL)/shopify/website-chat/conversations/\(conversationId)")!
+        return try await request(URLRequest(url: url))
+    }
+
+    func markShopifyWebsiteChatRead(conversationId: String) async throws -> MessageResponse {
+        let url = URL(string: "\(baseURL)/shopify/website-chat/conversations/\(conversationId)/read")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        return try await self.request(request)
+    }
     
     // MARK: - Files
     

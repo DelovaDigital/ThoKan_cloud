@@ -114,14 +114,35 @@ class ShopifyViewModel {
     private let apiClient = APIClient.shared
 
     var events: [ShopifyChatEvent] = []
+    var orders: [ShopifyOrderSummary] = []
+    var websiteConversations: [ShopifyWebsiteChatConversationSummary] = []
     var ordersChecked = 0
+    var unreadWebsiteConversations = 0
+    var unreadWebsiteMessages = 0
     var isLoading = false
     var errorMessage: String?
 
     @MainActor
-    func fetchFeed() async {
-        isLoading = true
+    func fetchWorkspace(showLoading: Bool = true) async {
+        if showLoading {
+            isLoading = true
+        }
         errorMessage = nil
+
+        await fetchFeed(showLoading: false)
+        await fetchOrders(showLoading: false)
+        await fetchWebsiteChatInbox(showLoading: false)
+
+        if showLoading {
+            isLoading = false
+        }
+    }
+
+    @MainActor
+    func fetchFeed(showLoading: Bool = true) async {
+        if showLoading {
+            isLoading = true
+        }
 
         do {
             let response = try await apiClient.fetchShopifyChatFeed()
@@ -134,11 +155,90 @@ class ShopifyViewModel {
                 ordersChecked = cached.orders_checked
                 errorMessage = "Offline modus: cached Shopify feed getoond"
             } else {
-                errorMessage = error.localizedDescription
+                errorMessage = errorMessage ?? error.localizedDescription
             }
         }
 
-        isLoading = false
+        if showLoading {
+            isLoading = false
+        }
+    }
+
+    @MainActor
+    func fetchOrders(showLoading: Bool = true) async {
+        if showLoading {
+            isLoading = true
+        }
+
+        do {
+            let response = try await apiClient.fetchShopifyOrders()
+            orders = response.orders
+        } catch {
+            errorMessage = errorMessage ?? error.localizedDescription
+        }
+
+        if showLoading {
+            isLoading = false
+        }
+    }
+
+    @MainActor
+    func fetchWebsiteChatInbox(showLoading: Bool = true) async {
+        if showLoading {
+            isLoading = true
+        }
+
+        do {
+            let response = try await apiClient.fetchShopifyWebsiteChatInbox()
+            websiteConversations = response.conversations
+            unreadWebsiteConversations = response.unread_conversations
+            unreadWebsiteMessages = response.unread_messages
+        } catch {
+            errorMessage = errorMessage ?? error.localizedDescription
+        }
+
+        if showLoading {
+            isLoading = false
+        }
+    }
+
+    func fetchOrder(orderId: String) async throws -> ShopifyOrderDetail {
+        try await apiClient.fetchShopifyOrder(orderId: orderId)
+    }
+
+    func fetchOrderEvents(orderId: String) async throws -> [ShopifyChatEvent] {
+        let response = try await apiClient.fetchShopifyOrderEvents(orderId: orderId)
+        return response.events
+    }
+
+    func fetchWebsiteChatConversation(conversationId: String, markAsRead: Bool = true) async throws -> ShopifyWebsiteChatConversation {
+        let conversation = try await apiClient.fetchShopifyWebsiteChatConversation(conversationId: conversationId)
+        if markAsRead {
+            _ = try? await apiClient.markShopifyWebsiteChatRead(conversationId: conversationId)
+            await MainActor.run {
+                if let index = websiteConversations.firstIndex(where: { $0.conversation_id == conversationId }) {
+                    let current = websiteConversations[index]
+                    websiteConversations[index] = ShopifyWebsiteChatConversationSummary(
+                        conversation_id: current.conversation_id,
+                        source: current.source,
+                        status: current.status,
+                        customer_name: current.customer_name,
+                        customer_email: current.customer_email,
+                        customer_phone: current.customer_phone,
+                        page_url: current.page_url,
+                        shop_domain: current.shop_domain,
+                        last_message_at: current.last_message_at,
+                        last_message_preview: current.last_message_preview,
+                        last_message_id: current.last_message_id,
+                        unread_count: 0,
+                        message_count: current.message_count
+                    )
+                }
+                unreadWebsiteConversations = websiteConversations.filter { $0.unread_count > 0 }.count
+                unreadWebsiteMessages = websiteConversations.reduce(0) { $0 + $1.unread_count }
+            }
+        }
+        return conversation
     }
 }
 
