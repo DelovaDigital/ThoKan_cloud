@@ -126,6 +126,7 @@ export default function MailPage() {
 
   // Message detail
   const [selectedMessage, setSelectedMessage] = useState<MailDetail | null>(null);
+  const [showMessageModal, setShowMessageModal] = useState(false);
   const [emailHtmlUrl, setEmailHtmlUrl] = useState<string | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [openedFromFolder, setOpenedFromFolder] = useState<string>("INBOX");
@@ -365,6 +366,7 @@ export default function MailPage() {
       }
 
       setSelectedMessage(detail);
+      setShowMessageModal(true);
       setShowReply(false);
       setReplyBody("");
     } catch (err) {
@@ -376,6 +378,7 @@ export default function MailPage() {
   function closeMessage() {
     if (emailHtmlUrl) { URL.revokeObjectURL(emailHtmlUrl); setEmailHtmlUrl(null); }
     setSelectedMessage(null);
+    setShowMessageModal(false);
     setShowReply(false);
     setReplyBody("");
   }
@@ -541,7 +544,7 @@ export default function MailPage() {
           </div>
         )}
 
-        <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)_380px]">
+        <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
           <aside className="section-block flex h-fit flex-col gap-2 xl:sticky xl:top-[96px]">
             <button
               onClick={() => { setTo(""); setSubject(""); setBody(""); setShowCompose(true); }}
@@ -706,7 +709,7 @@ export default function MailPage() {
             </ul>
           </main>
 
-          <aside className="section-block xl:sticky xl:top-[96px] xl:h-fit">
+          <aside className="hidden section-block xl:sticky xl:top-[96px] xl:h-fit">
             <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-5">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-45">Detailkaart</p>
@@ -794,6 +797,83 @@ export default function MailPage() {
             )}
           </aside>
         </div>
+
+        {showMessageModal && selectedMessage && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
+            onClick={closeMessage}
+          >
+            <div
+              className="section-block max-h-[90vh] w-full max-w-5xl overflow-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-4">
+                <div>
+                  <h2 className="text-lg font-semibold">{selectedMessage.subject || "(Geen onderwerp)"}</h2>
+                  <div className="mt-2 space-y-1 text-xs">
+                    <p><span className="opacity-45">Van:</span> <span className="font-medium opacity-80">{selectedMessage.from}</span></p>
+                    <p><span className="opacity-45">Aan:</span> <span className="font-medium opacity-80">{selectedMessage.to}</span></p>
+                    <p className="opacity-55">{formatDateLabel(selectedMessage.date)}</p>
+                  </div>
+                </div>
+                <button className="btn-secondary px-3 py-2" onClick={closeMessage}>
+                  <X className="h-4 w-4" />
+                  Sluiten
+                </button>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {activeFolder === "inbox" && (
+                  <button className="btn-secondary px-3 py-2" onClick={() => setShowReply(!showReply)}>
+                    <Reply className="h-4 w-4" />
+                    Antwoorden
+                  </button>
+                )}
+                <button className="rounded-xl border border-red-500/40 px-3 py-2 text-sm text-red-300 transition hover:bg-red-500/15" onClick={() => deleteMessage(selectedMessage.id, openedFromFolder)}>
+                  <Trash2 className="h-4 w-4" />
+                  Verwijderen
+                </button>
+              </div>
+
+              <div className="mt-4 overflow-hidden rounded-xl border border-border bg-white dark:bg-gray-900">
+                {emailHtmlUrl ? (
+                  <iframe
+                    src={emailHtmlUrl}
+                    className="h-[62vh] w-full border-0"
+                    sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
+                    scrolling="yes"
+                    title="E-mailinhoud"
+                  />
+                ) : selectedMessage.text_body ? (
+                  <pre className="max-h-[62vh] overflow-auto whitespace-pre-wrap p-4 font-sans text-sm" style={{ WebkitOverflowScrolling: "touch" }}>{selectedMessage.text_body}</pre>
+                ) : (
+                  <p className="p-4 text-sm opacity-60">Geen inhoud</p>
+                )}
+              </div>
+
+              {showReply && (
+                <div className="mt-4 rounded-xl border border-border bg-bg p-4">
+                  <h4 className="mb-3 font-medium">Antwoorden aan {selectedMessage.from}</h4>
+                  <textarea
+                    className="field-input min-h-40"
+                    placeholder="Typ je antwoord…"
+                    value={replyBody}
+                    onChange={(e) => setReplyBody(e.target.value)}
+                  />
+                  <div className="mt-3 flex gap-2">
+                    <button className="btn-primary px-4 py-2" onClick={replyMail}>
+                      <Reply className="h-4 w-4" />
+                      Antwoord verzenden
+                    </button>
+                    <button className="btn-secondary px-4 py-2" onClick={() => { setShowReply(false); setReplyBody(""); }}>
+                      Annuleren
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── Compose modal ─────────────────────────────────────────── */}
         {showCompose && (

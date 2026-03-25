@@ -97,6 +97,7 @@ export default function ShopifyPage() {
   const [chatConversations, setChatConversations] = useState<WebsiteChatConversation[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState("");
   const [selectedConversation, setSelectedConversation] = useState<WebsiteChatConversation | null>(null);
+  const [showConversationModal, setShowConversationModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [conversationLoading, setConversationLoading] = useState(false);
@@ -506,7 +507,10 @@ export default function ShopifyPage() {
                   return (
                     <button
                       key={conversation.conversation_id}
-                      onClick={() => setSelectedConversationId(conversation.conversation_id)}
+                      onClick={() => {
+                        setSelectedConversationId(conversation.conversation_id);
+                        setShowConversationModal(true);
+                      }}
                       className={`w-full rounded-xl border p-3 text-left transition ${
                         isActive ? "border-accent bg-accent/10" : "border-border bg-card hover:bg-card-hover"
                       }`}
@@ -541,7 +545,7 @@ export default function ShopifyPage() {
               )}
             </aside>
 
-            <div className="rounded-xl border border-border bg-bg p-4">
+            <div className="hidden rounded-xl border border-border bg-bg p-4">
               {conversationLoading ? (
                 <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
                   Conversatie laden...
@@ -607,6 +611,87 @@ export default function ShopifyPage() {
               )}
             </div>
           </div>
+
+          {showConversationModal && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
+              onClick={() => setShowConversationModal(false)}
+            >
+              <div
+                className="section-block max-h-[90vh] w-full max-w-5xl overflow-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {conversationLoading ? (
+                  <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
+                    Conversatie laden...
+                  </div>
+                ) : selectedConversation ? (
+                  <div>
+                    <div className="flex flex-col gap-3 border-b border-border/70 pb-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <h3 className="text-lg font-semibold">
+                          {selectedConversation.customer_name || selectedConversation.customer_email || "Websitechat"}
+                        </h3>
+                        <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted">
+                          {selectedConversation.customer_email && <span>{selectedConversation.customer_email}</span>}
+                          {selectedConversation.customer_phone && <span>{selectedConversation.customer_phone}</span>}
+                          {selectedConversation.shop_domain && <span>{selectedConversation.shop_domain}</span>}
+                          <span>Status: {selectedConversation.status || "open"}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs text-muted">
+                          <p className="font-medium">{selectedConversation.messages?.length || 0} berichten</p>
+                          <p className="mt-1">Gesprek: {selectedConversation.conversation_id}</p>
+                        </div>
+                        <button className="btn-secondary px-3 py-2" onClick={() => setShowConversationModal(false)}>
+                          Sluiten
+                        </button>
+                      </div>
+                    </div>
+
+                    {selectedConversation.page_url && (
+                      <div className="mt-4 rounded-xl border border-border bg-card px-4 py-3 text-sm">
+                        <p className="text-xs uppercase tracking-[0.18em] opacity-45">Pagina</p>
+                        <a href={selectedConversation.page_url} target="_blank" rel="noreferrer" className="mt-1 block break-all text-accent hover:underline">
+                          {selectedConversation.page_url}
+                        </a>
+                      </div>
+                    )}
+
+                    <div className="mt-4 space-y-3">
+                      {(selectedConversation.messages || []).length > 0 ? (
+                        selectedConversation.messages?.map((message) => {
+                          const inbound = message.direction !== "outbound";
+                          return (
+                            <div key={message.id} className={`flex ${inbound ? "justify-start" : "justify-end"}`}>
+                              <div className={`max-w-[85%] rounded-xl border px-4 py-3 ${
+                                inbound ? "border-border bg-card/45" : "border-accent/30 bg-accent/10"
+                              }`}>
+                                <div className="flex flex-wrap items-center gap-2 text-[11px] opacity-55">
+                                  <span>{message.author_name || message.author_email || (inbound ? "Bezoeker" : "Team")}</span>
+                                  <span>{message.sent_at ? new Date(message.sent_at).toLocaleString() : "-"}</span>
+                                </div>
+                                <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{message.message}</p>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
+                          Deze conversatie bevat nog geen berichten.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
+                    Selecteer links een websitechat om de berichten te bekijken.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {browserNotificationsSupported() && notificationPermission === "granted" && (
             <div className="mt-5 inline-flex items-center gap-2 rounded-xl border border-border bg-bg px-4 py-2 text-sm text-muted">
