@@ -520,9 +520,18 @@ export default function FilesPage() {
             </div>
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-3">
-            <div className="border border-border px-3 py-2.5 text-sm">Mappen: <span className="font-semibold">{visibleFolders.length}</span></div>
-            <div className="border border-border px-3 py-2.5 text-sm">Bestanden: <span className="font-semibold">{visibleFiles.length}</span></div>
-            <div className="border border-border px-3 py-2.5 text-sm">Opslag: <span className="font-semibold">{formatBytes(folderStorageBytes)}</span></div>
+            <div className="flex items-center gap-3 rounded-xl bg-amber-500/10 px-4 py-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-500"><Folder className="h-4 w-4" /></div>
+              <div><p className="text-xs opacity-60">Mappen</p><p className="text-xl font-bold">{visibleFolders.length}</p></div>
+            </div>
+            <div className="flex items-center gap-3 rounded-xl bg-accent/10 px-4 py-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/20 text-accent"><File className="h-4 w-4" /></div>
+              <div><p className="text-xs opacity-60">Bestanden</p><p className="text-xl font-bold">{visibleFiles.length}</p></div>
+            </div>
+            <div className="flex items-center gap-3 rounded-xl bg-emerald-500/10 px-4 py-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-500"><HardDrive className="h-4 w-4" /></div>
+              <div><p className="text-xs opacity-60">Opslag</p><p className="text-xl font-bold">{formatBytes(folderStorageBytes)}</p></div>
+            </div>
           </div>
         </section>
 
@@ -530,8 +539,18 @@ export default function FilesPage() {
           <UploadDropzone onUploaded={loadFiles} folderId={currentFolderId} />
         </section>
 
-        {userNotice && <div className="glass rounded-[1.5rem] p-4 text-sm opacity-90">{userNotice}</div>}
-        {userError && <div className="glass rounded-[1.5rem] border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{userError}</div>}
+        {userNotice && (
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm">
+            <div className="h-2 w-2 shrink-0 rounded-full bg-accent" />
+            <span className="opacity-80">{userNotice}</span>
+          </div>
+        )}
+        {userError && (
+          <div className="flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-3 text-sm text-red-400">
+            <X className="h-4 w-4 shrink-0" />
+            <span>{userError}</span>
+          </div>
+        )}
 
         <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
           <section className="section-block">
@@ -539,21 +558,25 @@ export default function FilesPage() {
             <div className="mt-3 space-y-1.5">
               <button
                 onClick={() => setCurrentFolderId(null)}
-                className={`w-full border px-3 py-2 text-left text-sm transition ${
-                  currentFolderId === null ? "border-accent/40 bg-accent/10 text-accent" : "border-border hover:bg-card"
+                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition ${
+                  currentFolderId === null ? "bg-accent text-white" : "hover:bg-card/70"
                 }`}
               >
+                <HardDrive className="h-4 w-4 shrink-0 opacity-80" />
                 Mijn bestanden
               </button>
               {quickFolders.map((folder) => (
                 <button
                   key={folder.id}
                   onClick={() => setCurrentFolderId(folder.id)}
-                  className={`w-full truncate border px-3 py-2 text-left text-sm transition ${
-                    currentFolderId === folder.id ? "border-accent/40 bg-accent/10 text-accent" : "border-border hover:bg-card"
+                  className={`flex w-full items-center gap-2.5 truncate rounded-lg px-3 py-2.5 text-left text-sm transition ${
+                    currentFolderId === folder.id ? "bg-accent/15 font-medium text-accent" : "hover:bg-card/70"
                   }`}
                   title={folder.path}
                 >
+                  <Folder className={`h-4 w-4 shrink-0 ${
+                    currentFolderId === folder.id ? "text-accent" : "text-amber-500"
+                  }`} />
                   {folder.name}
                 </button>
               ))}
@@ -575,19 +598,14 @@ export default function FilesPage() {
 
           <section className="section-block">
             <div className="flex items-start gap-4 border-b border-border/60 pb-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
-                <HardDrive className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold">Padnavigatie</h2>
-                <p className="mt-1 text-sm opacity-65">Blader door mappen en spring direct naar elk breadcrumb-niveau.</p>
-              </div>
+              <h2 className="text-base font-semibold">Locatie</h2>
+              <span className="ml-2 rounded-md bg-card px-2 py-0.5 font-mono text-xs opacity-60">{currentPath}</span>
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setCurrentFolderId(null)}
-                className={`rounded-2xl px-3 py-2 text-sm transition ${
-                  currentFolderId === null ? "bg-accent/20 font-medium text-accent" : "border border-border hover:bg-card/70"
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                  currentFolderId === null ? "bg-accent text-white" : "border border-border hover:bg-card/70"
                 }`}
               >
                 Start
@@ -599,7 +617,7 @@ export default function FilesPage() {
                     <ChevronRight className="h-4 w-4 opacity-35" />
                     <button
                       onClick={() => setCurrentFolderId(folderForCrumb?.id || null)}
-                      className="rounded-2xl border border-border px-3 py-2 text-sm transition hover:bg-card/70"
+                      className="rounded-lg border border-border px-3 py-1.5 text-sm transition hover:bg-card/70"
                     >
                       {crumb}
                     </button>
@@ -611,45 +629,38 @@ export default function FilesPage() {
         </div>
 
         <section className="section-block sticky top-[92px] z-10">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold">Zoeken, filteren en sorteren</p>
-              <p className="text-xs opacity-55">Verfijn het huidige mapoverzicht zonder van locatie te wisselen.</p>
-            </div>
-            <div className="border border-border px-2.5 py-1 text-xs">Explorer filters</div>
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-45" />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative max-w-xs flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-40" />
               <input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Zoek op bestandsnaam..."
-                className="w-full border border-border bg-transparent py-2 pl-9 pr-3 text-sm"
+                className="field-input pl-9"
               />
             </div>
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
-              className="border border-border bg-transparent px-3 py-2 text-sm"
-            >
-              <option value="all">Alle types</option>
-              <option value="image">Afbeeldingen</option>
-              <option value="video">Video</option>
-              <option value="audio">Audio</option>
-              <option value="pdf">PDF</option>
-              <option value="office">Kantoorbestanden</option>
-              <option value="text">Tekst/Code</option>
-            </select>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-              className="border border-border bg-transparent px-3 py-2 text-sm"
-            >
-              <option value="date_desc">Sorteer: Nieuwste eerst</option>
-              <option value="name_asc">Sorteer: Naam A-Z</option>
-              <option value="size_desc">Sorteer: Grootste eerst</option>
-            </select>
+            <div className="flex flex-wrap items-center gap-2">
+              {(["all", "image", "video", "audio", "pdf", "office", "text"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTypeFilter(t)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                    typeFilter === t ? "bg-accent text-white" : "border border-border hover:bg-card/70"
+                  }`}
+                >
+                  {({ all: "Alle", image: "Afbeeldingen", video: "Video", audio: "Audio", pdf: "PDF", office: "Kantoor", text: "Tekst" } as Record<string, string>)[t]}
+                </button>
+              ))}
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                className="rounded-full border border-border bg-transparent px-3 py-1.5 text-xs"
+              >
+                <option value="date_desc">Nieuwste eerst</option>
+                <option value="name_asc">Naam A-Z</option>
+                <option value="size_desc">Grootste eerst</option>
+              </select>
+            </div>
           </div>
         </section>
 
@@ -668,7 +679,7 @@ export default function FilesPage() {
             </div>
 
             <div className="space-y-2">
-              <div className="hidden grid-cols-[minmax(0,1fr)_140px_150px] gap-2 border border-border px-3 py-2 text-xs font-medium uppercase tracking-[0.1em] opacity-60 md:grid">
+              <div className="hidden grid-cols-[minmax(0,1fr)_120px_180px] gap-2 rounded-lg bg-card/50 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.1em] opacity-50 md:grid">
                 <span>Naam</span>
                 <span>Type</span>
                 <span>Grootte / Datum</span>
@@ -676,10 +687,10 @@ export default function FilesPage() {
               {visibleFolders.map((folder) => (
                 <div
                   key={folder.id}
-                  className="group grid grid-cols-1 gap-2 border border-border px-3 py-3 transition hover:border-accent/25 hover:bg-card md:grid-cols-[minmax(0,1fr)_140px_150px]"
+                  className="group grid grid-cols-1 gap-2 rounded-lg border border-border/60 px-4 py-3 transition hover:border-amber-400/40 hover:bg-amber-500/5 md:grid-cols-[minmax(0,1fr)_120px_180px]"
                 >
                   <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setCurrentFolderId(folder.id)}>
-                    <div className="flex h-9 w-9 items-center justify-center bg-amber-500/10 text-amber-500">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500">
                       <Folder className="h-5 w-5" />
                     </div>
                     <div className="min-w-0">
@@ -687,11 +698,10 @@ export default function FilesPage() {
                       <p className="truncate text-xs opacity-60">{folder.path || "/"}</p>
                     </div>
                   </button>
-                  <p className="text-xs opacity-65">Map</p>
-                  <div className="flex items-center justify-between gap-2 md:justify-end">
-                    <p className="text-xs opacity-60">-</p>
+                  <span className="inline-flex w-fit items-center rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">Map</span>
+                  <div className="flex items-center justify-end gap-2">
                   <button
-                    className="border border-border px-3 py-1.5 text-xs transition hover:bg-red-500/20"
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs transition hover:border-red-400/40 hover:bg-red-500/8 hover:text-red-400"
                     onClick={() => deleteFolder(folder.id)}
                   >
                     Verwijderen
@@ -706,12 +716,12 @@ export default function FilesPage() {
                 return (
                   <div
                     key={file.id}
-                    className={`relative grid grid-cols-1 gap-2 border px-3 py-3 text-sm transition md:grid-cols-[minmax(0,1fr)_140px_150px] ${
-                      isActive ? "border-accent/35 bg-accent/5" : "border-border bg-card/20 hover:bg-card"
+                    className={`relative grid grid-cols-1 gap-2 rounded-lg border px-4 py-3 text-sm transition md:grid-cols-[minmax(0,1fr)_120px_180px] ${
+                      isActive ? "border-accent/40 bg-accent/8" : "border-border/60 hover:border-border hover:bg-card/60"
                     }`}
                   >
                     <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => void openPreview(file)}>
-                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center ${getFileSurface(file)}`}>
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${getFileSurface(file)}`}>
                         <Icon className="h-5 w-5" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -724,13 +734,24 @@ export default function FilesPage() {
                         <p className="mt-1 text-[11px] opacity-60">{file.mime_type || "onbekend"}</p>
                       </div>
                     </button>
-                    <p className="text-xs opacity-65">{getFileKind(file)}</p>
+                    <span className={`inline-flex w-fit items-center rounded-md px-2 py-0.5 text-xs font-medium ${
+                      getFileKind(file) === "image" ? "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" :
+                      getFileKind(file) === "video" ? "bg-rose-500/12 text-rose-600 dark:text-rose-400" :
+                      getFileKind(file) === "audio" ? "bg-amber-500/12 text-amber-600 dark:text-amber-400" :
+                      getFileKind(file) === "pdf" ? "bg-red-500/12 text-red-600 dark:text-red-400" :
+                      getFileKind(file) === "office" ? "bg-indigo-500/12 text-indigo-600 dark:text-indigo-400" :
+                      getFileKind(file) === "text" ? "bg-sky-500/12 text-sky-600 dark:text-sky-400" :
+                      "bg-card/60 text-fg"
+                    }`}>{getFileKind(file)}</span>
                     <div className="flex items-center justify-between gap-2 md:justify-end">
-                      <p className="text-xs opacity-60">{formatBytes(file.size_bytes)} • {formatDateLabel(file.created_at)}</p>
+                      <div className="text-right">
+                        <p className="text-xs font-medium">{formatBytes(file.size_bytes)}</p>
+                        <p className="text-[11px] opacity-50">{formatDateLabel(file.created_at)}</p>
+                      </div>
 
                     <div className="relative ml-3" data-file-actions="true">
                       <button
-                        className="border border-border px-3 py-1.5 text-lg leading-none transition hover:bg-accent/10"
+                        className="rounded-lg border border-border p-1.5 transition hover:bg-accent/10"
                         onClick={(e) => {
                           e.stopPropagation();
                           setOpenActionFileId((prev) => (prev === file.id ? null : file.id));

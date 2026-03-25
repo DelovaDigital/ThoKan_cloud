@@ -463,14 +463,8 @@ export default function MailPage() {
         <section className="section-block">
           <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/40 px-3 py-1 text-xs font-medium opacity-80">
-                <Sparkles className="h-3.5 w-3.5 text-accent" />
-                Mail workspace
-              </div>
-              <h1 className="mt-4 text-3xl font-semibold sm:text-4xl">Mailbox en opvolging</h1>
-              <p className="mt-3 max-w-3xl text-sm opacity-70 sm:text-base">
-                Eén vaste werkruimte voor inbox, verzonden berichten, mailboxconfiguratie en inline berichtdetail, zodat e-mail niet meer als een losse modalstroom aanvoelt.
-              </p>
+              <h1 className="text-2xl font-bold sm:text-3xl">Mailbox</h1>
+              <p className="mt-1 text-sm opacity-60">Inbox, verzonden en berichtdetail in één werkruimte.</p>
               <div className="mt-5 flex flex-wrap gap-3">
                 {browserNotificationsSupported() && notificationPermission !== "granted" && (
                   <button
@@ -512,25 +506,21 @@ export default function MailPage() {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Actieve map</p>
-                <p className="mt-2 text-2xl font-semibold">{folderLabel}</p>
-                <p className="mt-1 text-sm opacity-60">Huidige mailboxfocus</p>
+              <div className="flex items-center gap-3 rounded-xl bg-accent/10 px-4 py-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/20 text-accent"><Inbox className="h-4 w-4" /></div>
+                <div><p className="text-xs opacity-60">Actieve map</p><p className="text-lg font-bold">{folderLabel}</p></div>
               </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Totaal in map</p>
-                <p className="mt-2 text-2xl font-semibold">{totalVisibleInFolder}</p>
-                <p className="mt-1 text-sm opacity-60">Inbox of verzonden volume</p>
+              <div className="flex items-center gap-3 rounded-xl bg-emerald-500/10 px-4 py-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-500"><Mail className="h-4 w-4" /></div>
+                <div><p className="text-xs opacity-60">Totaal in map</p><p className="text-lg font-bold">{totalVisibleInFolder}</p></div>
               </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Na filters</p>
-                <p className="mt-2 text-2xl font-semibold">{visibleList.length}</p>
-                <p className="mt-1 text-sm opacity-60">Zichtbare berichten in lijst</p>
+              <div className="flex items-center gap-3 rounded-xl bg-amber-500/10 px-4 py-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-500"><Search className="h-4 w-4" /></div>
+                <div><p className="text-xs opacity-60">Na filters</p><p className="text-lg font-bold">{visibleList.length}</p></div>
               </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Configuratie</p>
-                <p className="mt-2 text-2xl font-semibold">{config?.has_password ? "Actief" : "Setup"}</p>
-                <p className="mt-1 text-sm opacity-60">Mailboxverbinding en syncstatus</p>
+              <div className={`flex items-center gap-3 rounded-xl px-4 py-3 ${config?.has_password ? "bg-emerald-500/10" : "bg-amber-500/10"}`}>
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${config?.has_password ? "bg-emerald-500/20 text-emerald-500" : "bg-amber-500/20 text-amber-500"}`}><Settings2 className="h-4 w-4" /></div>
+                <div><p className="text-xs opacity-60">Verbinding</p><p className="text-lg font-bold">{config?.has_password ? "Actief" : "Setup"}</p></div>
               </div>
             </div>
           </div>
@@ -553,42 +543,52 @@ export default function MailPage() {
 
         <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)_380px]">
           <aside className="section-block flex h-fit flex-col gap-2 xl:sticky xl:top-[96px]">
-            <p className="px-2 text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Mappen</p>
             <button
-              onClick={() => {
-                setActiveFolder("inbox");
-                if (config?.has_password) loadInbox();
-              }}
-              className={`flex items-center justify-between border px-3 py-3 text-sm transition ${
-                activeFolder === "inbox" ? "bg-accent/15 font-medium" : "hover:bg-card/60"
-              }`}
+              onClick={() => { setTo(""); setSubject(""); setBody(""); setShowCompose(true); }}
+              className="btn-primary w-full justify-center"
             >
-              <span className="inline-flex items-center gap-2">
-                <Inbox className="h-4 w-4" />
-                Inbox
-              </span>
-              {totalMessages > 0 && <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs">{totalMessages}</span>}
+              <MailPlus className="h-4 w-4" />
+              Nieuwe e-mail
             </button>
-            <button
-              onClick={() => {
-                setActiveFolder("sent");
-                if (config?.has_password && sentMessages.length === 0) loadSent();
-              }}
-              className={`flex items-center justify-between border px-3 py-3 text-sm transition ${
-                activeFolder === "sent" ? "bg-accent/15 font-medium" : "hover:bg-card/60"
-              }`}
-            >
-              <span className="inline-flex items-center gap-2">
-                <Send className="h-4 w-4" />
-                Verzonden
+            <div className="mt-3 space-y-1">
+              <p className="px-1 pb-1 text-xs font-semibold uppercase tracking-widest opacity-40">Mappen</p>
+              <button
+                onClick={() => { setActiveFolder("inbox"); if (config?.has_password) loadInbox(); }}
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                  activeFolder === "inbox" ? "bg-accent text-white" : "hover:bg-card/70"
+                }`}
+              >
+                <span className="inline-flex items-center gap-2.5">
+                  <Inbox className="h-4 w-4 opacity-80" />
+                  Inbox
+                </span>
+                {totalMessages > 0 && (
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${activeFolder === "inbox" ? "bg-white/20" : "bg-accent/20 text-accent"}`}>
+                    {totalMessages}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => { setActiveFolder("sent"); if (config?.has_password && sentMessages.length === 0) loadSent(); }}
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                  activeFolder === "sent" ? "bg-accent text-white" : "hover:bg-card/70"
+                }`}
+              >
+                <span className="inline-flex items-center gap-2.5">
+                  <Send className="h-4 w-4 opacity-80" />
+                  Verzonden
+                </span>
+                {totalSent > 0 && (
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${activeFolder === "sent" ? "bg-white/20" : "bg-accent/20 text-accent"}`}>
+                    {totalSent}
+                  </span>
+                )}
+              </button>
+            </div>
+            <div className="mt-3 rounded-xl bg-card/40 px-3 py-3 text-xs">
+              <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 font-medium ${mailIsGlobal ? "bg-accent/15 text-accent" : "bg-card text-muted"}`}>
+                {mailIsGlobal ? "Globale mailbox" : "Persoonlijke mailbox"}
               </span>
-              {totalSent > 0 && <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs">{totalSent}</span>}
-            </button>
-
-            <div className="mt-3 border border-border/70 bg-card/30 p-4 text-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-45">Syncstatus</p>
-              <p className="mt-2 font-medium">{mailIsGlobal ? "Globale mailboxbasis" : "Accountgebonden mailbox"}</p>
-              <p className="mt-2 text-xs opacity-65">De mailmodule gebruikt dezelfde workspace-logica als settings en dashboard.</p>
             </div>
           </aside>
 
@@ -618,18 +618,7 @@ export default function MailPage() {
             </div>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] opacity-45">Op deze pagina</p>
-                <p className="mt-2 text-2xl font-semibold">{visibleList.length}</p>
-              </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] opacity-45">Mapvolume</p>
-                <p className="mt-2 text-2xl font-semibold">{totalVisibleInFolder}</p>
-              </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-card/35 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] opacity-45">Previewstaat</p>
-                <p className="mt-2 text-2xl font-semibold">{selectedMessage ? "Open" : "Stand-by"}</p>
-              </div>
+              <p className="text-sm opacity-60"><span className="font-semibold text-fg">{visibleList.length}</span> van {totalVisibleInFolder} berichten</p>
             </div>
 
             <div className="mt-5 space-y-3">
@@ -670,30 +659,35 @@ export default function MailPage() {
               {visibleList.map((msg) => {
                 const folderParam = activeFolder === "inbox" ? "INBOX" : sentFolderName;
                 const isActive = selectedMessage?.id === msg.id;
+                const senderStr = activeFolder === "inbox" ? msg.from : (msg.to ?? "");
+                const displayName = senderStr.replace(/<[^>]+>/g, "").trim() || senderStr;
+                const initials = displayName.split(/\s+/).slice(0, 2).map((w: string) => w[0]?.toUpperCase() ?? "").join("");
                 return (
                   <li
                     key={msg.id}
-                    className={`cursor-pointer rounded-[1.5rem] border p-4 transition ${
-                      isActive ? "border-accent/35 bg-accent/5" : "border-border bg-card/20 hover:bg-card/35"
+                    className={`group cursor-pointer rounded-xl border px-4 py-3.5 transition ${
+                      isActive ? "border-accent/40 bg-accent/8" : "border-border/60 hover:border-border hover:bg-card/60"
                     }`}
                     onClick={() => openMessage(msg.id, folderParam)}
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/15 text-xs font-bold text-accent">
+                        {initials || "?"}
+                      </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{msg.subject || "(Geen onderwerp)"}</p>
-                        <p className="mt-1 text-xs opacity-60">{activeFolder === "inbox" ? `Van: ${msg.from}` : `Aan: ${msg.to}`}</p>
-                        <p className="mt-1 text-[11px] opacity-45">{formatDateLabel(msg.date)}</p>
-                        {msg.snippet && <p className="mt-2 truncate text-xs opacity-55">{msg.snippet}</p>}
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="truncate text-sm font-semibold">{displayName}</p>
+                          <span className="shrink-0 text-[11px] opacity-45">{new Date(msg.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}</span>
+                        </div>
+                        <p className="mt-0.5 truncate text-xs font-medium opacity-80">{msg.subject || "(Geen onderwerp)"}</p>
+                        {msg.snippet && <p className="mt-1 truncate text-[11px] leading-relaxed opacity-50">{msg.snippet}</p>}
                       </div>
                       <button
-                        className="rounded-xl border border-border p-2 text-xs transition hover:bg-red-500/20"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteMessage(msg.id, folderParam);
-                        }}
+                        className="shrink-0 rounded-lg border border-transparent p-1.5 opacity-0 transition group-hover:opacity-100 hover:border-red-400/40 hover:bg-red-500/8 hover:text-red-400"
+                        onClick={(e) => { e.stopPropagation(); deleteMessage(msg.id, folderParam); }}
                         aria-label="Bericht verwijderen"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   </li>
@@ -712,7 +706,7 @@ export default function MailPage() {
             </ul>
           </main>
 
-          <aside className="glass rounded-[2rem] p-5 sm:p-6 xl:sticky xl:top-[96px] xl:h-fit">
+          <aside className="section-block xl:sticky xl:top-[96px] xl:h-fit">
             <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-5">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-45">Detailkaart</p>
@@ -729,9 +723,10 @@ export default function MailPage() {
             {loadingDetail && <p className="mt-5 text-sm opacity-70">Bericht laden…</p>}
 
             {!loadingDetail && !selectedMessage && (
-              <div className="mt-5 rounded-[1.5rem] border border-dashed border-border bg-card/25 p-6 text-center">
-                <p className="text-sm font-medium">Selecteer een bericht</p>
-                <p className="mt-2 text-sm opacity-65">De detailkaart toont hier onderwerp, afzender, inhoud en antwoordactie zonder een aparte modal te openen.</p>
+              <div className="mt-5 flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/20 px-4 py-10 text-center">
+                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-accent/10 text-accent"><Mail className="h-6 w-6" /></div>
+                <p className="text-sm font-semibold">Selecteer een bericht</p>
+                <p className="mt-1 max-w-[200px] text-xs opacity-55">Klik links op een bericht om de inhoud hier te lezen.</p>
               </div>
             )}
 
@@ -739,9 +734,11 @@ export default function MailPage() {
               <div className="mt-5 space-y-4">
                 <div className="rounded-[1.5rem] border border-border bg-card/25 p-4">
                   <p className="text-base font-semibold">{selectedMessage.subject || "(Geen onderwerp)"}</p>
-                  <p className="mt-2 text-xs opacity-65">Van: {selectedMessage.from}</p>
-                  <p className="mt-1 text-xs opacity-65">Aan: {selectedMessage.to}</p>
-                  <p className="mt-1 text-[11px] opacity-45">{formatDateLabel(selectedMessage.date)}</p>
+                  <div className="mt-3 space-y-1">
+                    <p className="text-xs"><span className="opacity-45">Van:</span> <span className="font-medium opacity-80">{selectedMessage.from}</span></p>
+                    <p className="text-xs"><span className="opacity-45">Aan:</span> <span className="font-medium opacity-80">{selectedMessage.to}</span></p>
+                    <p className="text-xs opacity-45">{formatDateLabel(selectedMessage.date)}</p>
+                  </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">
                     {activeFolder === "inbox" && (
@@ -757,7 +754,7 @@ export default function MailPage() {
                   </div>
                 </div>
 
-                <div className="overflow-hidden rounded-[1.5rem] border border-border bg-white dark:bg-gray-900">
+                <div className="overflow-hidden rounded-xl border border-border bg-white dark:bg-gray-900">
                   {emailHtmlUrl ? (
                     <iframe
                       src={emailHtmlUrl}

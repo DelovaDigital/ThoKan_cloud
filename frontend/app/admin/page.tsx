@@ -251,22 +251,22 @@ export default function AdminPage() {
           </div>
         </section>
 
-        <section className="glass rounded-[2rem] p-5 sm:p-6">
+        <section className="section-block">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold">Admin modules</h2>
-              <p className="mt-1 text-sm opacity-65">Beheer, directe communicatie en configuratie vallen nu onder dezelfde vaste werkruimtehiërarchie.</p>
+              <p className="mt-1 text-sm text-muted">Beheer, directe communicatie en configuratie vallen nu onder dezelfde vaste werkruimtehiërarchie.</p>
             </div>
-            <div className="rounded-full bg-card/40 px-3 py-1 text-xs font-medium opacity-75">Control layer</div>
+            <div className="rounded-full border border-border bg-bg px-3 py-1 text-xs font-medium text-muted">Control layer</div>
           </div>
 
           <div className="grid gap-3 lg:grid-cols-3">
             {adminModules.map((module) => (
-              <div key={module.title} className="rounded-[1.5rem] border border-border bg-card/25 p-4">
+              <div key={module.title} className="rounded-xl border border-border bg-bg p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold">{module.title}</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.16em] opacity-45">{module.status}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted">{module.status}</p>
                   </div>
                   {module.title === "Gebruikersbeheer" ? (
                     <Users className="h-5 w-5 text-accent" />
@@ -276,7 +276,7 @@ export default function AdminPage() {
                     <Settings2 className="h-5 w-5 text-accent" />
                   )}
                 </div>
-                <p className="mt-3 text-sm opacity-70">{module.description}</p>
+                <p className="mt-3 text-sm text-muted">{module.description}</p>
                 {module.href && (
                   <Link href={module.href} className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-accent hover:underline">
                     Open werkruimte
@@ -289,7 +289,7 @@ export default function AdminPage() {
         </section>
 
         {status && (
-          <div className="glass rounded-[1.5rem] border border-border bg-card/50 p-4 text-sm">
+          <div className="rounded-xl border border-border bg-bg p-4 text-sm">
             {status}
           </div>
         )}
@@ -300,7 +300,7 @@ export default function AdminPage() {
         )}
 
         <div className="grid gap-5 xl:grid-cols-[1.05fr_1.2fr]">
-          <form onSubmit={inviteUser} className="glass rounded-[2rem] p-5 sm:p-6">
+          <form onSubmit={inviteUser} className="section-block">
             <div className="flex items-start gap-4 border-b border-border/60 pb-5">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
                 <UserPlus className="h-5 w-5" />
@@ -308,43 +308,43 @@ export default function AdminPage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] opacity-45">Gebruikerstoegang</p>
                 <h2 className="mt-1 text-xl font-semibold">Gebruiker aanmaken</h2>
-                <p className="mt-2 text-sm opacity-65">Maak een gebruiker met tijdelijk wachtwoord aan. De gebruiker kan direct inloggen.</p>
+                <p className="mt-2 text-sm text-muted">Maak een gebruiker met tijdelijk wachtwoord aan. De gebruiker kan direct inloggen.</p>
               </div>
             </div>
 
             <div className="mt-5 grid gap-3 md:grid-cols-2">
               <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-medium">E-mail</label>
-                <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="naam@bedrijf.com" className="w-full rounded-2xl border border-border bg-transparent px-3 py-2.5" required />
+                <label className="field-label">E-mail</label>
+                <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="naam@bedrijf.com" className="field-input" required />
               </div>
               <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-medium">Volledige naam</label>
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" className="w-full rounded-2xl border border-border bg-transparent px-3 py-2.5" required />
+                <label className="field-label">Volledige naam</label>
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" className="field-input" required />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium">Tijdelijk wachtwoord</label>
-                <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Tijdelijk wachtwoord" className="w-full rounded-2xl border border-border bg-transparent px-3 py-2.5" required />
+                <label className="field-label">Tijdelijk wachtwoord</label>
+                <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Tijdelijk wachtwoord" className="field-input" required />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium">Rol</label>
-                <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full rounded-2xl border border-border bg-transparent px-3 py-2.5">
+                <label className="field-label">Rol</label>
+                <select value={role} onChange={(e) => setRole(e.target.value)} className="field-input">
                   <option value="employee">medewerker</option>
                   <option value="admin">beheerder</option>
                 </select>
               </div>
             </div>
 
-            <div className="mt-5 rounded-[1.5rem] border border-border/70 bg-card/30 p-4 text-sm opacity-70">
+            <div className="mt-5 rounded-xl border border-border bg-bg p-4 text-sm text-muted">
               Nieuwe gebruikers kunnen meteen inloggen met het tijdelijke wachtwoord en dit daarna wijzigen.
             </div>
 
-            <button className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90">
+            <button className="btn-primary mt-5">
               <UserPlus className="h-4 w-4" />
               Gebruiker aanmaken
             </button>
           </form>
 
-          <section className="glass rounded-[2rem] p-5 sm:p-6">
+          <section className="section-block">
             <div className="flex flex-col gap-4 border-b border-border/60 pb-5 md:flex-row md:items-center md:justify-between">
               <div className="flex items-start gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
@@ -353,7 +353,7 @@ export default function AdminPage() {
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] opacity-45">Overzicht</p>
                   <h3 className="mt-1 text-xl font-semibold">Gebruikers</h3>
-                  <p className="mt-2 text-sm opacity-65">Bekijk gebruikersaccounts snel met zoeken en sorteren.</p>
+                  <p className="mt-2 text-sm text-muted">Bekijk gebruikersaccounts snel met zoeken en sorteren.</p>
                 </div>
               </div>
               <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -363,13 +363,13 @@ export default function AdminPage() {
                     value={userSearch}
                     onChange={(e) => setUserSearch(e.target.value)}
                     placeholder="Zoek naam of e-mail"
-                    className="w-full rounded-2xl border border-border bg-transparent py-2.5 pl-9 pr-3 text-sm"
+                    className="field-input py-2.5 pl-9 pr-3"
                   />
                 </div>
                 <select
                   value={userSort}
                   onChange={(e) => setUserSort(e.target.value as "name" | "email")}
-                  className="rounded-2xl border border-border bg-transparent px-3 py-2.5 text-sm"
+                  className="field-input"
                 >
                   <option value="name">Sorteer op naam</option>
                   <option value="email">Sorteer op e-mail</option>
@@ -379,7 +379,7 @@ export default function AdminPage() {
 
             <ul className="mt-5 space-y-3 text-sm">
               {visibleUsers.map((u) => (
-                <li key={u.id} className="flex items-center justify-between gap-4 rounded-[1.5rem] border border-border bg-card/25 p-4">
+                <li key={u.id} className="flex items-center justify-between gap-4 rounded-xl border border-border bg-bg p-4">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{u.full_name}</p>
                     <p className="mt-1 truncate text-xs opacity-70">{u.email}</p>
@@ -388,16 +388,10 @@ export default function AdminPage() {
                     <span className={`rounded-full px-3 py-1 text-xs font-medium ${u.is_active ? "bg-green-500/20 text-green-300" : "bg-red-500/20 text-red-300"}`}>
                       {u.is_active ? "actief" : "inactief"}
                     </span>
-                    <button
-                      onClick={() => void openChat(u)}
-                      className="rounded-xl border border-border px-3 py-1 text-xs transition hover:bg-card/70"
-                    >
+                    <button onClick={() => void openChat(u)} className="btn-secondary px-3 py-1 text-xs">
                       Chat
                     </button>
-                    <button
-                      onClick={() => void renameUser(u.id, u.full_name)}
-                      className="rounded-xl border border-border px-3 py-1 text-xs transition hover:bg-card/70"
-                    >
+                    <button onClick={() => void renameUser(u.id, u.full_name)} className="btn-secondary px-3 py-1 text-xs">
                       Naam wijzigen
                     </button>
                     <button
@@ -415,7 +409,7 @@ export default function AdminPage() {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_380px]">
-          <section className="glass rounded-[2rem] p-5 sm:p-6">
+          <section className="section-block">
             <div className="flex items-start gap-4 border-b border-border/60 pb-5">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
                 <HardDrive className="h-5 w-5" />
@@ -423,12 +417,12 @@ export default function AdminPage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] opacity-45">Capaciteit</p>
                 <h3 className="mt-1 text-xl font-semibold">Opslaggebruik</h3>
-                <p className="mt-2 text-sm opacity-65">Zie welke accounts het meeste opslag gebruiken in de cloudomgeving.</p>
+                <p className="mt-2 text-sm text-muted">Zie welke accounts het meeste opslag gebruiken in de cloudomgeving.</p>
               </div>
             </div>
             <ul className="mt-5 grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-2">
               {usage.map((u) => (
-                <li key={u.email} className="rounded-[1.5rem] border border-border bg-card/25 p-4">
+                <li key={u.email} className="rounded-xl border border-border bg-bg p-4">
                   <p className="truncate font-medium">{u.email}</p>
                   <p className="mt-2 text-lg font-semibold">{formatStorage(u.used_bytes)}</p>
                   <p className="mt-1 text-xs opacity-55">Huidig toegewezen gebruik</p>
@@ -438,12 +432,12 @@ export default function AdminPage() {
             </ul>
           </section>
 
-          <aside className="glass rounded-[2rem] p-5 sm:p-6 xl:sticky xl:top-[96px] xl:h-fit">
+          <aside className="section-block xl:sticky xl:top-[96px] xl:h-fit">
             <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-5">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-45">Detailkaart</p>
                 <h3 className="mt-2 text-lg font-semibold">Direct chat</h3>
-                <p className="mt-1 text-sm opacity-60">Open een gebruiker vanuit de lijst om hier meteen te communiceren.</p>
+                <p className="mt-1 text-sm text-muted">Open een gebruiker vanuit de lijst om hier meteen te communiceren.</p>
               </div>
               {selectedChatUser && (
                 <button onClick={() => setSelectedChatUser(null)} className="rounded-xl border border-border p-2 transition hover:bg-card/60" aria-label="Chat sluiten">
@@ -453,7 +447,7 @@ export default function AdminPage() {
             </div>
 
             {!selectedChatUser && (
-              <div className="mt-5 rounded-[1.5rem] border border-dashed border-border bg-card/25 p-6 text-center">
+              <div className="mt-5 rounded-xl border border-dashed border-border bg-bg p-6 text-center">
                 <p className="text-sm font-medium">Selecteer een gebruiker</p>
                 <p className="mt-2 text-sm opacity-65">De chatkaart toont hier direct het gesprek en een snelle antwoordflow.</p>
               </div>
@@ -461,19 +455,19 @@ export default function AdminPage() {
 
             {selectedChatUser && (
               <div className="mt-5 space-y-4">
-                <div className="rounded-[1.5rem] border border-border bg-card/25 p-4">
+                <div className="rounded-xl border border-border bg-bg p-4">
                   <p className="text-base font-semibold">{selectedChatUser.full_name}</p>
                   <p className="mt-1 text-xs opacity-60">{selectedChatUser.email}</p>
                 </div>
 
-                <div className="max-h-[360px] space-y-3 overflow-y-auto rounded-[1.5rem] border border-border bg-card/25 p-4">
+                <div className="max-h-[360px] space-y-3 overflow-y-auto rounded-xl border border-border bg-bg p-4">
                   {chatLoading ? (
                     <p className="text-sm opacity-70">Chat laden...</p>
                   ) : chatMessages.length === 0 ? (
                     <p className="text-sm opacity-70">Nog geen berichten.</p>
                   ) : (
                     chatMessages.map((message) => (
-                      <div key={message.id} className="rounded-2xl border border-border/70 bg-card/35 p-3">
+                      <div key={message.id} className="rounded-xl border border-border bg-bg p-3">
                         <p className="text-sm">{message.body}</p>
                         <p className="mt-2 text-xs opacity-55">{formatDateLabel(message.created_at)}</p>
                       </div>
@@ -481,17 +475,17 @@ export default function AdminPage() {
                   )}
                 </div>
 
-                <div className="space-y-3 rounded-[1.5rem] border border-border bg-card/25 p-4">
+                <div className="space-y-3 rounded-xl border border-border bg-bg p-4">
                   <textarea
                     value={chatDraft}
                     onChange={(e) => setChatDraft(e.target.value)}
                     placeholder="Typ een bericht"
-                    className="min-h-[110px] w-full rounded-2xl border border-border bg-transparent px-3 py-2.5 text-sm"
+                    className="field-input min-h-[110px]"
                   />
                   <button
                     onClick={() => void sendChatMessage()}
                     disabled={chatSending || !chatDraft.trim()}
-                    className="inline-flex items-center gap-2 rounded-2xl bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                    className="btn-primary"
                   >
                     <Send className="h-4 w-4" />
                     {chatSending ? "Verzenden..." : "Verzend"}

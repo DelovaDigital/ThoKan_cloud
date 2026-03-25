@@ -55,8 +55,12 @@ class MountPoint(BaseModel):
 class SystemInfo(BaseModel):
     hostname: str
     platform: str
+    architecture: str
+    os_release: str
     cpu_cores: int
     python_version: str
+    app_version: str
+    install_root: str
     storage: StorageInfo
     available_mounts: list[MountPoint]
 
@@ -626,8 +630,12 @@ def get_system_info(
     return SystemInfo(
         hostname=platform.node(),
         platform=platform.platform(),
+        architecture=platform.machine(),
+        os_release=platform.release(),
         cpu_cores=os.cpu_count() or 1,
         python_version=platform.python_version(),
+        app_version=get_runtime_version(default="unknown"),
+        install_root=str(_resolve_install_root()),
         storage=StorageInfo(
             current_path=str(storage_path),
             total_gb=round(total_gb, 2),
@@ -949,7 +957,7 @@ def apply_update_package(
                 env=env,
             )
 
-            auto_rebuild_docker = True
+            auto_rebuild_docker = cfg.get("auto_rebuild_docker", True) if payload.auto_rebuild_docker is None else payload.auto_rebuild_docker
             auto_update_ubuntu = cfg.get("auto_update_ubuntu", False) if payload.auto_update_ubuntu is None else payload.auto_update_ubuntu
 
             post_stdout: list[str] = []

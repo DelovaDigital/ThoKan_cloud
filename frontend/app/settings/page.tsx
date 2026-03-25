@@ -43,8 +43,12 @@ type MountPoint = {
 type SystemInfo = {
   hostname: string;
   platform: string;
+  architecture: string;
+  os_release: string;
   cpu_cores: number;
   python_version: string;
+  app_version: string;
+  install_root: string;
   storage: StorageInfo;
   available_mounts: MountPoint[];
 };
@@ -172,16 +176,18 @@ function SectionShell({
   aside?: ReactNode;
 }) {
   return (
-    <section className="glass overflow-hidden rounded-[2rem] p-5 sm:p-6">
-      <div className="flex flex-col gap-4 border-b border-border/60 pb-5 md:flex-row md:items-start md:justify-between">
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent/15 text-accent">
+    <section className="section-block">
+      <div className="flex flex-col gap-3 border-b border-border/60 pb-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
             {icon}
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] opacity-45">{eyebrow}</p>
-            <h2 className="mt-1 text-xl font-semibold">{title}</h2>
-            <p className="mt-2 max-w-3xl text-sm opacity-65">{description}</p>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold">{title}</h2>
+              <span className="rounded-md bg-card/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest opacity-50">{eyebrow}</span>
+            </div>
+            <p className="mt-0.5 max-w-2xl text-xs opacity-55">{description}</p>
           </div>
         </div>
         {aside ? <div className="shrink-0">{aside}</div> : null}
@@ -942,22 +948,22 @@ export default function SettingsPage() {
       <PageTransition>
       <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="section-block h-fit lg:sticky lg:top-6">
-          <p className="px-1 pb-2 text-xs font-medium uppercase tracking-widest text-muted">Instellingen</p>
-          <div className="space-y-1">
+          <p className="px-1 pb-2 text-xs font-semibold uppercase tracking-widest opacity-45">Navigatie</p>
+          <div className="space-y-1.5">
             <button
               onClick={() => {
                 setSectionFilter("info");
               }}
-              className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${sectionFilter === "info" ? "bg-accent/15 text-accent" : "hover:bg-card/40"}`}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition ${sectionFilter === "info" ? "bg-accent text-white" : "hover:bg-card/60"}`}
             >
               <Server className="h-4 w-4" />
-              Info
+              Systeem
             </button>
             <button
               onClick={() => {
                 setSectionFilter("storage");
               }}
-              className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${sectionFilter === "storage" ? "bg-accent/15 text-accent" : "hover:bg-card/40"}`}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition ${sectionFilter === "storage" ? "bg-accent text-white" : "hover:bg-card/60"}`}
             >
               <HardDrive className="h-4 w-4" />
               Opslag
@@ -966,16 +972,16 @@ export default function SettingsPage() {
               onClick={() => {
                 setSectionFilter("mail");
               }}
-              className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${sectionFilter === "mail" ? "bg-accent/15 text-accent" : "hover:bg-card/40"}`}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition ${sectionFilter === "mail" ? "bg-accent text-white" : "hover:bg-card/60"}`}
             >
               <Mail className="h-4 w-4" />
-              Mail instellingen
+              Mail
             </button>
             <button
               onClick={() => {
                 setSectionFilter("api");
               }}
-              className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${sectionFilter === "api" ? "bg-accent/15 text-accent" : "hover:bg-card/40"}`}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition ${sectionFilter === "api" ? "bg-accent text-white" : "hover:bg-card/60"}`}
             >
               <Store className="h-4 w-4" />
               Integraties
@@ -984,9 +990,12 @@ export default function SettingsPage() {
         </aside>
 
         <div className="space-y-5">
-          <section className="glass overflow-hidden rounded-[1.75rem] p-4">
-            <div className="flex items-center justify-between gap-3">
-              <h1 className="text-xl font-semibold">Instellingen</h1>
+          <section className="section-block">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h1 className="text-2xl font-bold">Instellingen</h1>
+                <p className="mt-1 text-sm opacity-60">Beheer systeem, opslag, mail en integraties vanaf één plek.</p>
+              </div>
               <button
                 onClick={() => {
                   loadInfo();
@@ -999,7 +1008,7 @@ export default function SettingsPage() {
                   loadAptStatus();
                 }}
                 disabled={loading}
-                className="inline-flex items-center gap-2 rounded-xl bg-accent px-3 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                className="btn-primary"
               >
                 <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                 {loading ? "Verversen..." : "Verversen"}
@@ -1008,7 +1017,8 @@ export default function SettingsPage() {
           </section>
 
         {status && (
-          <div className="glass rounded-[1.5rem] border border-border/70 bg-card/50 p-4 text-sm">
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-accent" />
             <p>{status}</p>
           </div>
         )}
@@ -1036,6 +1046,22 @@ export default function SettingsPage() {
             <div className="rounded-xl border border-border bg-card/30 p-3">
               <span className="text-xs font-medium opacity-70">Python-versie</span>
               <p className="mt-1 font-mono text-sm">{info?.python_version || "-"}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card/30 p-3">
+              <span className="text-xs font-medium opacity-70">ThoKan versie</span>
+              <p className="mt-1 font-mono text-sm">{info?.app_version || "-"}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card/30 p-3">
+              <span className="text-xs font-medium opacity-70">Architectuur</span>
+              <p className="mt-1 font-mono text-sm">{info?.architecture || "-"}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card/30 p-3">
+              <span className="text-xs font-medium opacity-70">OS release</span>
+              <p className="mt-1 font-mono text-sm">{info?.os_release || "-"}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card/30 p-3">
+              <span className="text-xs font-medium opacity-70">Installatiemap</span>
+              <p className="mt-1 truncate font-mono text-sm">{info?.install_root || "-"}</p>
             </div>
           </div>
         </SectionShell>
@@ -1700,7 +1726,89 @@ Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
                 Git pull
               </button>
             </div>
+            <div className="inline-flex items-center rounded-2xl border border-border bg-card/30 p-1">
+              <button
+                onClick={() => setUpdateChannel("stable")}
+                className={`rounded-xl px-3 py-1.5 text-sm transition ${updateChannel === "stable" ? "bg-accent text-white" : "hover:bg-card/60"}`}
+              >
+                Stable
+              </button>
+              <button
+                onClick={() => setUpdateChannel("beta")}
+                className={`rounded-xl px-3 py-1.5 text-sm transition ${updateChannel === "beta" ? "bg-accent text-white" : "hover:bg-card/60"}`}
+              >
+                Beta
+              </button>
+            </div>
+            <label className="inline-flex items-center gap-2 rounded-xl border border-border bg-card/30 px-3 py-2 text-sm">
+              <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
+              Dry run (geen wijzigingen)
+            </label>
           </div>
+
+          {updateConfig && (
+            <div className="mt-4 rounded-xl border border-border bg-card/25 p-4">
+              <p className="text-sm font-medium">Automatische update-instellingen</p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <label className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={updateConfig.auto_check_updates}
+                    onChange={(e) => setUpdateConfig((prev) => (prev ? { ...prev, auto_check_updates: e.target.checked } : prev))}
+                  />
+                  Auto-check updates
+                </label>
+                <label className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={updateConfig.auto_install_nightly}
+                    onChange={(e) => setUpdateConfig((prev) => (prev ? { ...prev, auto_install_nightly: e.target.checked } : prev))}
+                  />
+                  Nachtelijke auto-installatie
+                </label>
+                <label className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={updateConfig.auto_rebuild_docker}
+                    onChange={(e) => setUpdateConfig((prev) => (prev ? { ...prev, auto_rebuild_docker: e.target.checked } : prev))}
+                  />
+                  Docker herstart na update
+                </label>
+                <label className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={updateConfig.auto_update_ubuntu}
+                    onChange={(e) => setUpdateConfig((prev) => (prev ? { ...prev, auto_update_ubuntu: e.target.checked } : prev))}
+                  />
+                  Ubuntu pakketten bijwerken
+                </label>
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-[220px_1fr]">
+                <div>
+                  <label className="block text-sm font-medium">Nachtuur (0-23)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={23}
+                    className="field-input mt-2"
+                    value={updateConfig.nightly_install_hour}
+                    onChange={(e) => {
+                      const value = Math.max(0, Math.min(23, Number(e.target.value) || 0));
+                      setUpdateConfig((prev) => (prev ? { ...prev, nightly_install_hour: value } : prev));
+                    }}
+                  />
+                </div>
+                <div className="rounded-xl border border-border bg-bg p-3 text-sm text-muted">
+                  Gepland venster: {formatNightlyWindow(updateConfig.nightly_install_hour)}
+                </div>
+              </div>
+              <div className="mt-3">
+                <button onClick={saveUpdateConfig} disabled={updateBusy} className="btn-secondary">
+                  {updateBusy ? "Opslaan..." : "Update-instellingen opslaan"}
+                </button>
+              </div>
+            </div>
+          )}
 
           {updateSourceMode === "git" && (
             <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -1723,6 +1831,39 @@ Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
                   onChange={(e) => setGitBranch(e.target.value)}
                   placeholder="main"
                 />
+              </div>
+            </div>
+          )}
+
+          {updateSourceMode === "cloud" && (
+            <div className="mt-3 rounded-xl border border-border bg-card/25 p-4">
+              <p className="text-sm font-medium">Cloud pakketbeheer</p>
+              <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
+                <select
+                  value={selectedPackage}
+                  onChange={(e) => setSelectedPackage(e.target.value)}
+                  className="field-input"
+                >
+                  {channelPackages.map((pkg) => (
+                    <option key={pkg.name} value={pkg.name}>
+                      {pkg.name}
+                    </option>
+                  ))}
+                </select>
+                <button onClick={applyUpdate} disabled={!selectedPackage || updateBusy} className="btn-primary">
+                  {updateBusy ? "Installeren..." : "Geselecteerd pakket installeren"}
+                </button>
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
+                <input
+                  type="file"
+                  accept=".zip,.tar,.tar.gz,.tgz"
+                  className="field-input"
+                  onChange={(e) => setUpdateFile(e.target.files?.[0] ?? null)}
+                />
+                <button onClick={uploadUpdatePackage} disabled={!updateFile || updateBusy} className="btn-secondary">
+                  Upload pakket
+                </button>
               </div>
             </div>
           )}
@@ -1756,6 +1897,20 @@ Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
             )}
           </div>
 
+          <div className="mt-3 rounded-xl border border-border bg-card/25 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={() => void loadAptStatus()} className="btn-secondary" disabled={aptBusy}>
+                APT status verversen
+              </button>
+              <button onClick={applyAptUpgrade} className="btn-secondary" disabled={aptBusy || updateBusy}>
+                {aptBusy ? "Bezig..." : "APT upgrade uitvoeren"}
+              </button>
+              <span className="rounded-full border border-border bg-bg px-3 py-1 text-xs text-muted">
+                {aptStatus ? `${aptStatus.upgradable} upgradable` : "APT status onbekend"}
+              </span>
+            </div>
+          </div>
+
           {updatePrompt?.notes && (
             <div className="mt-4 rounded-xl border border-border bg-card/40 p-3">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wider opacity-60">Releasenotes</p>
@@ -1770,6 +1925,24 @@ Header: X-Shopify-Chat-Secret: ${shopifyWebsiteChatSecret || "<shared-secret>"}
           {(updateBusy || updateStatus?.state === "running") && (
             <div className="mt-4 rounded-xl border border-border bg-card/30 p-3 text-sm">
               <p className="opacity-70">{updateStatus?.progress_step || "Update bezig..."}</p>
+            </div>
+          )}
+
+          {updateStatus && (
+            <div className="mt-4 rounded-xl border border-border bg-card/25 p-4 text-sm">
+              <div className="grid gap-2 md:grid-cols-2">
+                <p>Laatste pakket: <span className="font-mono">{updateStatus.package_name || updateStatus.installed_package_name || "-"}</span></p>
+                <p>Exit code: <span className="font-mono">{updateStatus.return_code ?? "-"}</span></p>
+                <p>Build datum: <span className="font-mono">{updateStatus.installed_build_date || getBuildDateFromPackageName(updateStatus.installed_package_name) || "-"}</span></p>
+                <p>Klaar op: <span className="font-mono">{updateStatus.finished_at || "-"}</span></p>
+              </div>
+              {(updateStatus.stderr || updateStatus.stdout) && (
+                <details className="mt-3">
+                  <summary className="cursor-pointer text-sm font-medium">Laatste update logs</summary>
+                  {updateStatus.stderr && <pre className="mt-2 max-h-44 overflow-auto rounded-lg border border-border bg-bg p-3 text-xs text-red-300">{updateStatus.stderr}</pre>}
+                  {updateStatus.stdout && <pre className="mt-2 max-h-44 overflow-auto rounded-lg border border-border bg-bg p-3 text-xs">{updateStatus.stdout}</pre>}
+                </details>
+              )}
             </div>
           )}
         </SectionShell>

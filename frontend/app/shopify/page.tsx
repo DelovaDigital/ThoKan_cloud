@@ -407,26 +407,26 @@ export default function ShopifyPage() {
           </div>
         </section>
 
-        <section className="glass rounded-[2rem] p-5 sm:p-6">
+        <section className="section-block">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold">Commerce modules</h2>
-              <p className="mt-1 text-sm opacity-65">
+              <p className="mt-1 text-sm text-muted">
                 Een bredere laag voor storefront operations: chat, orderobservatie, fulfilment en uitbreidbare modules zoals reviews en forms.
               </p>
             </div>
-            <div className="rounded-full bg-card/40 px-3 py-1 text-xs font-medium opacity-75">
+            <div className="rounded-full border border-border bg-bg px-3 py-1 text-xs font-medium text-muted">
               UX afgestemd op snelle opvolging
             </div>
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
             {commerceModules.map((module) => (
-              <div key={module.title} className="rounded-[1.5rem] border border-border bg-card/25 p-4">
+              <div key={module.title} className="rounded-xl border border-border bg-bg p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold">{module.title}</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.16em] opacity-45">{module.status}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted">{module.status}</p>
                   </div>
                   {module.title === "Website chat" ? (
                     <MessageSquareText className="h-5 w-5 text-accent" />
@@ -438,7 +438,7 @@ export default function ShopifyPage() {
                     <Star className="h-5 w-5 text-accent" />
                   )}
                 </div>
-                <p className="mt-3 text-sm opacity-70">{module.description}</p>
+                <p className="mt-3 text-sm text-muted">{module.description}</p>
                 {module.href && (
                   <Link href={module.href} className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-accent hover:underline">
                     Open module
@@ -449,29 +449,29 @@ export default function ShopifyPage() {
             ))}
           </div>
 
-          <div className="mt-4 rounded-[1.5rem] border border-border/70 bg-card/25 p-4">
+          <div className="mt-4 rounded-xl border border-border bg-bg p-4">
             <div className="grid gap-3 lg:grid-cols-3">
-              <div className="rounded-xl border border-border/70 bg-card/35 p-4">
+              <div className="rounded-xl border border-border bg-card p-4">
                 <p className="text-sm font-medium">Webshop chat</p>
-                <p className="mt-2 text-sm opacity-70">Actief via de website-chat bridge en zichtbaar als gedeelde inbox voor support en sales.</p>
+                <p className="mt-2 text-sm text-muted">Actief via de website-chat bridge en zichtbaar als gedeelde inbox voor support en sales.</p>
               </div>
-              <div className="rounded-xl border border-border/70 bg-card/35 p-4">
+              <div className="rounded-xl border border-border bg-card p-4">
                 <p className="text-sm font-medium">Reviews</p>
-                <p className="mt-2 text-sm opacity-70">Nog geen backend route, maar deze cockpit is voorbereid om review events of moderation later naast chat te tonen.</p>
+                <p className="mt-2 text-sm text-muted">Nog geen backend route, maar deze cockpit is voorbereid om review events of moderation later naast chat te tonen.</p>
               </div>
-              <div className="rounded-xl border border-border/70 bg-card/35 p-4">
+              <div className="rounded-xl border border-border bg-card p-4">
                 <p className="text-sm font-medium">Forms</p>
-                <p className="mt-2 text-sm opacity-70">Form submissions kunnen later via dezelfde bridge/webhook aanpak binnenkomen zodat lead capture en supportvragen niet versnipperd raken.</p>
+                <p className="mt-2 text-sm text-muted">Form submissions kunnen later via dezelfde bridge/webhook aanpak binnenkomen zodat lead capture en supportvragen niet versnipperd raken.</p>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="glass rounded-[2rem] p-5 sm:p-6">
+        <section className="section-block">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold">Websitechats</h2>
-              <p className="mt-1 text-sm opacity-65">
+              <p className="mt-1 text-sm text-muted">
                 Deze inbox toont berichten die je website of middleware naar de Shopify website-chat bridge in Cloud doorstuurt.
               </p>
             </div>
@@ -485,9 +485,9 @@ export default function ShopifyPage() {
               value={chatSearch}
               onChange={(event) => setChatSearch(event.target.value)}
               placeholder="Zoek op naam, e-mail, telefoon of laatste bericht"
-              className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+              className="field-input"
             />
-            <div className="inline-flex items-center justify-center rounded-xl border border-border px-3 py-2 text-sm opacity-70">
+            <div className="inline-flex items-center justify-center rounded-xl border border-border bg-bg px-3 py-2 text-sm text-muted">
               {visibleConversations.length} zichtbaar
             </div>
           </div>
@@ -495,7 +495,7 @@ export default function ShopifyPage() {
           {chatError && <p className="mt-4 text-sm text-red-400">{chatError}</p>}
 
           <div className="mt-5 grid gap-4 lg:grid-cols-[0.92fr_1.08fr]">
-            <aside className="space-y-2 rounded-[1.5rem] border border-border bg-card/20 p-3">
+            <aside className="space-y-2 rounded-xl border border-border bg-bg p-3">
               {loading ? (
                 <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
                   Websitechats laden...
@@ -507,8 +507,8 @@ export default function ShopifyPage() {
                     <button
                       key={conversation.conversation_id}
                       onClick={() => setSelectedConversationId(conversation.conversation_id)}
-                      className={`w-full rounded-[1.25rem] border p-3 text-left transition ${
-                        isActive ? "border-accent bg-accent/10" : "border-border bg-card/20 hover:bg-card/40"
+                      className={`w-full rounded-xl border p-3 text-left transition ${
+                        isActive ? "border-accent bg-accent/10" : "border-border bg-card hover:bg-card-hover"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -541,7 +541,7 @@ export default function ShopifyPage() {
               )}
             </aside>
 
-            <div className="rounded-[1.5rem] border border-border bg-card/20 p-4">
+            <div className="rounded-xl border border-border bg-bg p-4">
               {conversationLoading ? (
                 <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
                   Conversatie laden...
@@ -560,14 +560,14 @@ export default function ShopifyPage() {
                         <span>Status: {selectedConversation.status || "open"}</span>
                       </div>
                     </div>
-                    <div className="rounded-2xl border border-border/70 bg-card/40 px-3 py-2 text-xs opacity-70">
+                    <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs text-muted">
                       <p className="font-medium">{selectedConversation.messages?.length || 0} berichten</p>
                       <p className="mt-1">Gesprek: {selectedConversation.conversation_id}</p>
                     </div>
                   </div>
 
                   {selectedConversation.page_url && (
-                    <div className="mt-4 rounded-2xl border border-border/70 bg-card/30 px-4 py-3 text-sm">
+                    <div className="mt-4 rounded-xl border border-border bg-card px-4 py-3 text-sm">
                       <p className="text-xs uppercase tracking-[0.18em] opacity-45">Pagina</p>
                       <a href={selectedConversation.page_url} target="_blank" rel="noreferrer" className="mt-1 block break-all text-accent hover:underline">
                         {selectedConversation.page_url}
@@ -581,7 +581,7 @@ export default function ShopifyPage() {
                         const inbound = message.direction !== "outbound";
                         return (
                           <div key={message.id} className={`flex ${inbound ? "justify-start" : "justify-end"}`}>
-                            <div className={`max-w-[85%] rounded-[1.25rem] border px-4 py-3 ${
+                            <div className={`max-w-[85%] rounded-xl border px-4 py-3 ${
                               inbound ? "border-border bg-card/45" : "border-accent/30 bg-accent/10"
                             }`}>
                               <div className="flex flex-wrap items-center gap-2 text-[11px] opacity-55">
@@ -609,21 +609,21 @@ export default function ShopifyPage() {
           </div>
 
           {browserNotificationsSupported() && notificationPermission === "granted" && (
-            <div className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-border bg-card/30 px-4 py-2 text-sm opacity-75">
+            <div className="mt-5 inline-flex items-center gap-2 rounded-xl border border-border bg-bg px-4 py-2 text-sm text-muted">
               <BellRing className="h-4 w-4 text-accent" />
               Browsermeldingen zijn actief voor websitechats en Shopify events.
             </div>
           )}
 
-          <div className="mt-5 rounded-[1.5rem] border border-border/70 bg-card/25 p-4">
+          <div className="mt-5 rounded-xl border border-border bg-bg p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-sm font-medium">Volgende uitbreidingen in deze commerce workspace</p>
-                <p className="mt-1 text-sm opacity-65">
+                <p className="mt-1 text-sm text-muted">
                   Zodra de backend API’s toegevoegd zijn, kunnen reviews, embedded forms en extra storefront events hier zonder nieuw navigatiepatroon landen.
                 </p>
               </div>
-              <Link href="/settings" className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm transition hover:bg-card/60">
+              <Link href="/settings" className="btn-secondary px-3 py-2 text-sm">
                 <FileText className="h-4 w-4" />
                 Integraties beheren
               </Link>
@@ -631,15 +631,15 @@ export default function ShopifyPage() {
           </div>
         </section>
 
-        <section className="glass rounded-[2rem] p-5 sm:p-6">
+        <section className="section-block">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold">Shopify orderevents</h2>
-              <p className="mt-1 text-sm opacity-65">
+              <p className="mt-1 text-sm text-muted">
                 Deze feed bundelt recente Shopify-ordergebeurtenissen tot één stroom op basis van de bestaande Admin API-integratie.
               </p>
             </div>
-            <div className="rounded-full bg-card/40 px-3 py-1 text-xs font-medium opacity-75">
+            <div className="rounded-full border border-border bg-bg px-3 py-1 text-xs font-medium text-muted">
               Polling elke 60 seconden
             </div>
           </div>
@@ -649,12 +649,12 @@ export default function ShopifyPage() {
               value={eventSearch}
               onChange={(event) => setEventSearch(event.target.value)}
               placeholder="Zoek op bestelling, klant, auteur of bericht"
-              className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+              className="field-input"
             />
             <select
               value={typeFilter}
               onChange={(event) => setTypeFilter(event.target.value)}
-              className="rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+              className="field-input"
             >
               <option value="all">Alle types</option>
               {eventTypes.map((type) => (
@@ -663,7 +663,7 @@ export default function ShopifyPage() {
                 </option>
               ))}
             </select>
-            <div className="inline-flex items-center justify-center rounded-xl border border-border px-3 py-2 text-sm opacity-70">
+            <div className="inline-flex items-center justify-center rounded-xl border border-border bg-bg px-3 py-2 text-sm text-muted">
               {visibleEvents.length} zichtbaar
             </div>
           </div>
@@ -677,7 +677,7 @@ export default function ShopifyPage() {
               </div>
             ) : visibleEvents.length > 0 ? (
               visibleEvents.map((event) => (
-                <article key={event.id} className="rounded-[1.5rem] border border-border bg-card/25 p-4">
+                <article key={event.id} className="rounded-xl border border-border bg-bg p-4">
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -701,7 +701,7 @@ export default function ShopifyPage() {
                         <span>Afhandeling: {event.fulfillment_status || "-"}</span>
                       </div>
                     </div>
-                    <div className="rounded-2xl border border-border/70 bg-card/40 px-3 py-2 text-xs">
+                    <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs">
                       <p className="font-medium">{event.author || "Shopify"}</p>
                       <p className="mt-1 opacity-60">Order ID: {event.order_id}</p>
                     </div>

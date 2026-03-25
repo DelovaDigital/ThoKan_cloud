@@ -160,16 +160,12 @@ export default function ChatPage() {
   return (
     <LayoutShell>
       <PageTransition>
-      <div className="space-y-4">
+      <div className="space-y-5">
         <section className="section-block">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/40 px-3 py-1 text-xs font-medium opacity-80">
-                <MessageSquare className="h-3.5 w-3.5 text-accent" />
-                Team chat
-              </div>
-              <h1 className="mt-4 text-3xl font-semibold sm:text-4xl">Chat</h1>
-              <p className="mt-2 text-sm opacity-70">Chat direct met gebruikers binnen ThoKan Cloud.</p>
+              <h1 className="text-2xl font-bold sm:text-3xl">Team chat</h1>
+              <p className="mt-1 text-sm opacity-60">Directe berichten met gebruikers in één overzichtelijke workspace.</p>
             </div>
             <button onClick={() => void loadUsers()} disabled={loadingUsers} className="btn-primary">
               <RefreshCw className={`h-4 w-4 ${loadingUsers ? "animate-spin" : ""}`} />
@@ -178,23 +174,28 @@ export default function ChatPage() {
           </div>
         </section>
 
-        {error && <div className="rounded-[1.5rem] border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
+        {error && (
+          <div className="flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-3 text-sm text-red-400">
+            <span className="h-2 w-2 rounded-full bg-red-400" />
+            {error}
+          </div>
+        )}
 
         <div className="grid gap-5 xl:grid-cols-[0.9fr_1.3fr]">
           <section className="section-block flex h-[68vh] flex-col overflow-hidden">
-            <div className="flex items-start gap-4 border-b border-border/60 pb-5">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
+            <div className="flex items-start gap-3 border-b border-border/60 pb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/15 text-accent">
                 <Users className="h-5 w-5" />
               </div>
               <div className="w-full">
-                <h2 className="text-xl font-semibold">Gebruikers</h2>
+                <h2 className="text-base font-bold">Gebruikers</h2>
                 <div className="relative mt-3">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-45" />
                   <input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder="Zoek op naam of e-mail"
-                    className="w-full border border-border bg-transparent py-2.5 pl-9 pr-3 text-sm"
+                    className="field-input pl-9"
                   />
                 </div>
               </div>
@@ -205,12 +206,19 @@ export default function ChatPage() {
                 <li key={user.id}>
                   <button
                     onClick={() => void openConversation(user)}
-                    className={`w-full border px-4 py-3 text-left transition ${
-                      selectedUser?.id === user.id ? "border-accent bg-accent/10" : "border-border bg-card/20 hover:bg-card"
+                    className={`w-full rounded-lg border px-3 py-3 text-left transition ${
+                      selectedUser?.id === user.id ? "border-accent/40 bg-accent/10" : "border-border/70 hover:border-border hover:bg-card/60"
                     }`}
                   >
-                    <p className="truncate text-sm font-medium">{user.full_name}</p>
-                    <p className="mt-1 truncate text-xs opacity-65">{user.email}</p>
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/15 text-xs font-semibold text-accent">
+                        {(user.full_name || user.email || "?").split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{user.full_name}</p>
+                        <p className="mt-0.5 truncate text-xs opacity-60">{user.email}</p>
+                      </div>
+                    </div>
                   </button>
                 </li>
               ))}
@@ -221,13 +229,13 @@ export default function ChatPage() {
           <section className="section-block flex h-[68vh] flex-col overflow-hidden">
             {selectedUser ? (
               <>
-                <div className="border-b border-border/60 pb-5">
+                <div className="border-b border-border/60 pb-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] opacity-45">Conversatie</p>
-                  <h3 className="mt-1 text-xl font-semibold">{selectedUser.full_name}</h3>
-                  <p className="mt-1 text-sm opacity-65">{selectedUser.email}</p>
+                  <h3 className="mt-1 text-lg font-bold">{selectedUser.full_name}</h3>
+                  <p className="mt-0.5 text-sm opacity-60">{selectedUser.email}</p>
                 </div>
 
-                <div ref={messagesContainerRef} className="mt-4 flex-1 space-y-2 overflow-y-auto border border-border bg-card/20 p-3">
+                <div ref={messagesContainerRef} className="mt-4 flex-1 space-y-2 overflow-y-auto rounded-xl border border-border bg-card/20 p-3">
                   {loadingConversation ? (
                     <p className="text-sm opacity-70">Chat laden...</p>
                   ) : messages.length === 0 ? (
@@ -238,7 +246,7 @@ export default function ChatPage() {
                       const senderLabel = ownMessage ? "Jij" : selectedUser.full_name;
                       return (
                         <div key={message.id} className={`flex ${ownMessage ? "justify-end" : "justify-start"}`}>
-                          <div className={`max-w-[85%] rounded-xl border px-3 py-2 ${ownMessage ? "border-accent/40 bg-accent/15" : "border-border/70 bg-card/35"}`}>
+                          <div className={`max-w-[85%] rounded-xl border px-3 py-2.5 ${ownMessage ? "border-accent/40 bg-accent/15" : "border-border/70 bg-card"}`}>
                             <p className="text-[11px] font-medium opacity-65">{senderLabel}</p>
                             <p className="mt-1 text-sm">{message.body}</p>
                             <p className="mt-1 text-[11px] opacity-55">{new Date(message.created_at).toLocaleString()}</p>
@@ -254,7 +262,7 @@ export default function ChatPage() {
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
                     placeholder="Typ je bericht..."
-                    className="w-full border border-border bg-transparent px-3 py-2.5 text-sm"
+                    className="field-input"
                     onKeyDown={(event) => {
                       if (event.key === "Enter" && !event.shiftKey) {
                         event.preventDefault();

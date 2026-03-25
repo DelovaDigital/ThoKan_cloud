@@ -503,7 +503,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-2">
-          <section className="glass rounded-[2rem] p-5 sm:p-6">
+          <section className="section-block">
             <div className="flex items-start gap-4 border-b border-border/60 pb-5">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
                 <Boxes className="h-5 w-5" />
@@ -516,7 +516,7 @@ export default function DashboardPage() {
             <ul className="mt-5 space-y-3">
               {data?.recent_files && data.recent_files.length > 0 ? (
                 data.recent_files.map((file) => (
-                  <li key={file.id} className="flex items-center justify-between gap-3 rounded-[1.5rem] border border-border bg-card/25 p-4">
+                  <li key={file.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-card p-3.5">
                     <div className="min-w-0">
                       <span className="block truncate text-sm font-medium">{file.name}</span>
                       <span className="mt-1 block text-xs opacity-55">{formatDateLabel(file.created_at)}</span>
@@ -532,7 +532,7 @@ export default function DashboardPage() {
             </ul>
           </section>
 
-          <section className="glass rounded-[2rem] p-5 sm:p-6">
+          <section className="section-block">
             <div className="flex items-start justify-between gap-4 border-b border-border/60 pb-5">
               <div className="flex items-start gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
@@ -562,7 +562,7 @@ export default function DashboardPage() {
             <ul className="mt-4 space-y-3">
               {filteredActivity.length > 0 ? (
                 filteredActivity.map((entry, index) => (
-                  <li key={`${entry.event_type}-${index}`} className="rounded-[1.5rem] border border-border bg-card/25 p-4">
+                  <li key={`${entry.event_type}-${index}`} className="rounded-xl border border-border/70 bg-card p-3.5">
                     <span className="text-sm font-medium">{entry.event_type}</span>
                     <p className="mt-1 text-xs opacity-60">{formatDateLabel(entry.created_at)}</p>
                   </li>
@@ -577,7 +577,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.08fr)_380px]">
-          <section className="glass rounded-[2rem] p-5 sm:p-6">
+          <section className="section-block">
             <div className="flex flex-col gap-4 border-b border-border/60 pb-5 md:flex-row md:items-start md:justify-between">
               <div className="flex items-start gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
@@ -628,7 +628,7 @@ export default function DashboardPage() {
                   return (
                     <button
                       key={order.id}
-                      className={`flex w-full items-start justify-between gap-4 rounded-[1.5rem] border p-4 text-left transition ${
+                      className={`flex w-full items-start justify-between gap-4 rounded-xl border p-3.5 text-left transition ${
                         isActive ? "border-accent/35 bg-accent/5" : "border-border bg-card/20 hover:bg-card/35"
                       }`}
                       onClick={() => openOrderDetail(order.id)}
@@ -659,7 +659,7 @@ export default function DashboardPage() {
             <p className="mt-2 text-xs opacity-60">Klik op een bestelling om rechts details en Gelato-status te openen.</p>
           </section>
 
-          <aside className="glass rounded-[2rem] p-5 sm:p-6 xl:sticky xl:top-[96px] xl:h-fit">
+          <aside className="section-block xl:sticky xl:top-[96px] xl:h-fit">
             <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-5">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-45">Detailkaart</p>
@@ -677,7 +677,7 @@ export default function DashboardPage() {
             {!orderDetailLoading && orderDetailError && <p className="mt-5 text-sm text-red-400">{orderDetailError}</p>}
 
             {!orderDetailLoading && !orderDetailError && !selectedOrder && (
-              <div className="mt-5 rounded-[1.5rem] border border-dashed border-border bg-card/25 p-6 text-center">
+              <div className="mt-5 rounded-xl border border-dashed border-border bg-card/25 p-6 text-center">
                 <p className="text-sm font-medium">Selecteer een bestelling</p>
                 <p className="mt-2 text-sm opacity-65">De detailkaart toont hier direct klantinfo, orderlijnen, Shopify-events en Gelato-status.</p>
               </div>
@@ -687,7 +687,7 @@ export default function DashboardPage() {
 
             {selectedOrder && !orderDetailLoading && (
               <div className="mt-5 space-y-4 text-sm">
-                <div className="rounded-[1.5rem] border border-border bg-card/25 p-4">
+                <div className="rounded-xl border border-border bg-card/25 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-base font-semibold">{selectedOrder.name}</p>
