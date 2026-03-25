@@ -15,14 +15,17 @@ from app.core.rate_limit import limiter
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.core.versioning import get_runtime_version
 from app.services.mail_push_watcher import mail_push_watcher
+from app.services.shopify_order_push_watcher import shopify_order_push_watcher
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     mail_push_watcher.start()
+    shopify_order_push_watcher.start()
     try:
         yield
     finally:
+        await shopify_order_push_watcher.stop()
         await mail_push_watcher.stop()
 
 

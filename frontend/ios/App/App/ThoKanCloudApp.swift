@@ -5,6 +5,10 @@ import UserNotifications
 extension Notification.Name {
     static let thokanOpenTab = Notification.Name("thokan.open.tab")
     static let thokanDeviceTokenUpdated = Notification.Name("thokan.device.token.updated")
+    static let thokanOpenChatUser = Notification.Name("thokan.open.chat.user")
+    static let thokanOpenMailMessage = Notification.Name("thokan.open.mail.message")
+    static let thokanOpenShopifyOrder = Notification.Name("thokan.open.shopify.order")
+    static let thokanOpenShopifyConversation = Notification.Name("thokan.open.shopify.conversation")
 }
 
 enum AppAppearance: String, CaseIterable, Identifiable {
@@ -300,7 +304,7 @@ final class AppNotificationMonitor: NSObject, UNUserNotificationCenterDelegate {
 
             while !Task.isCancelled {
                 await pollIfNeeded()
-                try? await Task.sleep(for: .seconds(8))
+                try? await Task.sleep(for: .seconds(5))
             }
         }
     }
@@ -479,5 +483,17 @@ final class AppNotificationMonitor: NSObject, UNUserNotificationCenterDelegate {
         let info = response.notification.request.content.userInfo
         guard let tab = info["target_tab"] as? Int else { return }
         NotificationCenter.default.post(name: .thokanOpenTab, object: tab)
+        if let userId = info["chat_user_id"] as? String, !userId.isEmpty {
+            NotificationCenter.default.post(name: .thokanOpenChatUser, object: userId)
+        }
+        if let messageId = info["mail_message_id"] as? String, !messageId.isEmpty {
+            NotificationCenter.default.post(name: .thokanOpenMailMessage, object: messageId)
+        }
+        if let orderId = info["shopify_order_id"] as? String, !orderId.isEmpty {
+            NotificationCenter.default.post(name: .thokanOpenShopifyOrder, object: orderId)
+        }
+        if let conversationId = info["shopify_chat_conversation_id"] as? String, !conversationId.isEmpty {
+            NotificationCenter.default.post(name: .thokanOpenShopifyConversation, object: conversationId)
+        }
     }
 }

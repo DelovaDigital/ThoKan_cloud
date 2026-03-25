@@ -74,7 +74,7 @@ type WebsiteChatReadResponse = {
   message: string;
 };
 
-const POLL_INTERVAL_MS = 60_000;
+const POLL_INTERVAL_MS = 10_000;
 const LAST_EVENT_STORAGE_KEY = "shopify-chat-last-event-id";
 const LAST_WEBSITE_CHAT_STORAGE_KEY = "shopify-website-chat-last-message-id";
 
@@ -119,7 +119,26 @@ export default function ShopifyPage() {
       void refreshWorkspace(true);
     }, POLL_INTERVAL_MS);
 
-    return () => window.clearInterval(interval);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void refreshWorkspace(true);
+      }
+    };
+
+    const handleAppActive = () => {
+      void refreshWorkspace(true);
+    };
+
+    window.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("app-active", handleAppActive as EventListener);
+    window.addEventListener("network-online", handleAppActive as EventListener);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("app-active", handleAppActive as EventListener);
+      window.removeEventListener("network-online", handleAppActive as EventListener);
+    };
   }, []);
 
   useEffect(() => {

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Capacitor } from "@capacitor/core";
 import { motion, AnimatePresence } from "framer-motion";
@@ -111,7 +110,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
 
   /* ── Chat notification polling ───────────────────────────── */
   useEffect(() => {
-    if (!authChecked || isNative) return;
+    if (!authChecked) return;
     let cancelled = false;
 
     async function pollChatNotifications() {
@@ -165,10 +164,24 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       setChatUnreadCount(0);
       try { localStorage.setItem("chat_unread_count", "0"); } catch { /* ignore */ }
     }
+
+    const handleRefresh = () => {
+      void pollChatNotifications();
+    };
+
     void pollChatNotifications();
-    const interval = setInterval(() => { void pollChatNotifications(); }, 5000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [authChecked, isNative, pathname]);
+    const interval = setInterval(() => { void pollChatNotifications(); }, 3000);
+    window.addEventListener("app-active", handleRefresh as EventListener);
+    window.addEventListener("network-online", handleRefresh as EventListener);
+    window.addEventListener("visibilitychange", handleRefresh);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener("app-active", handleRefresh as EventListener);
+      window.removeEventListener("network-online", handleRefresh as EventListener);
+      window.removeEventListener("visibilitychange", handleRefresh);
+    };
+  }, [authChecked, pathname]);
 
   /* ── Keyboard shortcut (⌘K) ──────────────────────────────── */
   useEffect(() => {
@@ -284,8 +297,8 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                 transition={{ duration: 0.15 }}
                 className="flex items-center gap-2.5 overflow-hidden"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-bg">
-                  <Image src="/Logo.png" alt="ThoKan" width={26} height={26} className="h-6 w-6 object-contain" priority />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent">
+                  <img src="/Logo.png" alt="ThoKan" className="h-6 w-6 object-contain" />
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold leading-tight">ThoKan</p>
@@ -299,9 +312,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
                 transition={{ duration: 0.15 }}
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-bg"
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent"
               >
-                <Image src="/Logo.png" alt="ThoKan" width={20} height={20} className="h-5 w-5 object-contain" priority />
+                <img src="/Logo.png" alt="ThoKan" className="h-5 w-5 object-contain" />
               </motion.div>
             )}
           </AnimatePresence>

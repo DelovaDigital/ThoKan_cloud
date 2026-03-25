@@ -24,6 +24,7 @@ export function CapacitorProviders() {
     };
 
     let appBackButtonListener: { remove: () => Promise<void> } | undefined;
+    let appStateListener: { remove: () => Promise<void> } | undefined;
     let networkListener: { remove: () => Promise<void> } | undefined;
 
     const setupListeners = async () => {
@@ -41,6 +42,12 @@ export function CapacitorProviders() {
         if (Capacitor.getPlatform() === 'android') {
           appBackButtonListener = await App.addListener('backButton', handleAppBackButton);
         }
+
+        appStateListener = await App.addListener('appStateChange', (state) => {
+          if (state.isActive) {
+            window.dispatchEvent(new CustomEvent('app-active'));
+          }
+        });
 
         // Listen for network changes
         networkListener = await Network.addListener('networkStatusChange', (status) => {
@@ -69,6 +76,7 @@ export function CapacitorProviders() {
 
     return () => {
       void appBackButtonListener?.remove();
+      void appStateListener?.remove();
       void networkListener?.remove();
     };
   }, []);

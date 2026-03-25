@@ -528,58 +528,193 @@ struct FilesTab: View {
 
 // MARK: - Shopify Tab
 
+private enum ShopifyNativeSection: String, CaseIterable, Identifiable {
+    case orders
+    case events
+    case websiteChat
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .orders: return "Orders"
+        case .events: return "Events"
+        case .websiteChat: return "Website chat"
+        }
+    }
+}
+
 struct ShopifyTab: View {
     @State private var viewModel = ShopifyViewModel()
+    @State private var selectedSection = ShopifyNativeSection.orders
+    @State private var selectedEvent: ShopifyChatEvent?
+    @State private var selectedOrder: DeepLinkedShopifyOrder?
+    @State private var selectedConversation: DeepLinkedShopifyConversation?
 
-    var body: some View {
-        NavigationStack {
-            Group {
-                if viewModel.isLoading {
-                    ProgressView("Loading Shopify feed...")
-                } else if viewModel.events.isEmpty {
-                    ContentUnavailableView(
-                        "No Shopify events",
-                        systemImage: "message",
-                        description: Text("Connect Shopify and refresh to see recent order activity. Shopify Inbox conversations are not exposed through this API route.")
-                    )
-                } else {
-                    List(viewModel.events, id: \.id) { event in
-                        NavigationLink {
-                            ShopifyEventDetailView(event: event)
+    @MainActor
+    private func openOrderFromPush(_ orderId: String) async {
+        selectedSection = .orders
+        if viewModel.orders.isEmpty {
+            await viewModel.fetchWorkspace()
+        }
+        selectedOrder = DeepLinkedShopifyOrder(id: orderId)
+    }
+
+    @MainActor
+    private func openConversationFromPush(_ conversationId: String) async {
+        selectedSection = .websiteChat
+        if viewModel.websiteConversations.isEmpty {
+            await viewModel.fetchWorkspace()
+        }
+        selectedConversation = DeepLinkedShopifyConversation(id: conversationId)
+    }
+
+    @ViewBuilder
+    private var sectionContent: some View {
+        switch selectedSection {
+        case .orders:
+            if viewModel.orders.isEmpty {
+                ContentUnavailableView(
+                    "No Shopify orders",
+                    systemImage: "shippingbox",
+                    description: Text("Connect Shopify and refresh to see recente orders in de native app.")
+                )
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Orders")
+                        .font(.headline)
+                    ForEach(viewModel.orders) { order in
+                        Button {
+                            selectedOrder = DeepLinkedShopifyOrder(id: order.id)
+                        } label: {
+                            ShopifyOrderRow(order: order)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .cloudCardStyle()
+            }
+        case .events:
+            if viewModel.events.isEmpty {
+                ContentUnavailableView(
+                    "No Shopify events",
+                    systemImage: "message",
+                    description: Text("De native eventfeed vult zich zodra Shopify orders en events beschikbaar zijn.")
+                )
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Recente events")
+                        .font(.headline)
+                    ForEach(viewModel.events) { event in
+                        Button {
+                            selectedEvent = event
                         } label: {
                             ShopifyEventRow(event: event)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
+                .cloudCardStyle()
             }
+        case .websiteChat:
+            if viewModel.websiteConversations.isEmpty {
+                ContentUnavailableView(
+                    "No website chats",
+                    systemImage: "bubble.left.and.bubble.right",
+                    description: Text("Nieuwe storefront chats verschijnen hier als aparte native gesprekken.")
+                )
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Website conversations")
+                        .font(.headline)
+                    ForEach(viewModel.websiteConversations) { conversation in
+                        Button {
+                            selectedConversation = DeepLinkedShopifyConversation(id: conversation.conversation_id)
+                        } label: {
+                            ShopifyWebsiteConversationRow(conversation: conversation)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .cloudCardStyle()
+            }
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    CloudHeroCard(
+                        title: "Shopify cockpit",
+                        subtitle: "Orders, events en storefront gesprekken in een native workflow.",
+                        badges: [
+                            ("Orders", "\(viewModel.orders.count)"),
+                            ("Events", "\(viewModel.events.count)"),
+                            ("Chats", "\(viewModel.unreadWebsiteMessages)")
+                        ]
+                    )
+
+                    Picker("Section", selection: $selectedSection) {
+                        ForEach(ShopifyNativeSection.allCases) { section in
+                            Text(section.title).tag(section)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    if let errorMessage = viewModel.errorMessage {
+                        Text(errorMessage)
+                            .foregroundStyle(.red)
+                            .cloudCardStyle()
+                    }
+
+                    sectionContent
+                }
+                .padding()
+            }
+            .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("Shopify")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         Task {
-                            await viewModel.fetchFeed()
+                            await viewModel.fetchWorkspace()
                         }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
                 }
             }
-            .safeAreaInset(edge: .bottom) {
-                if !viewModel.events.isEmpty {
-                    HStack {
-                        Label("\(viewModel.ordersChecked) orders checked", systemImage: "shippingbox")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                    .background(.ultraThinMaterial)
-                }
-            }
         }
         .task {
-            await viewModel.fetchFeed()
+            await viewModel.fetchWorkspace()
+        }
+        .sheet(item: $selectedEvent) { event in
+            NavigationStack {
+                ShopifyEventDetailView(event: event)
+            }
+        }
+        .sheet(item: $selectedOrder) { selection in
+            NavigationStack {
+                ShopifyOrderDetailView(orderId: selection.id)
+            }
+        }
+        .sheet(item: $selectedConversation) { selection in
+            NavigationStack {
+                ShopifyWebsiteChatConversationView(conversationId: selection.id)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .thokanOpenShopifyOrder)) { notification in
+            guard let orderId = notification.object as? String, !orderId.isEmpty else { return }
+            Task {
+                await openOrderFromPush(orderId)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .thokanOpenShopifyConversation)) { notification in
+            guard let conversationId = notification.object as? String, !conversationId.isEmpty else { return }
+            Task {
+                await openConversationFromPush(conversationId)
+            }
         }
     }
 }
@@ -594,6 +729,16 @@ struct DirectMessagesTab: View {
         guard !query.isEmpty else { return usersViewModel.users }
         return usersViewModel.users.filter {
             $0.email.lowercased().contains(query) || $0.full_name.lowercased().contains(query)
+        }
+    }
+
+    @MainActor
+    private func openChatUserFromPush(_ userId: String) async {
+        if usersViewModel.users.isEmpty {
+            await usersViewModel.loadUsers()
+        }
+        if let user = usersViewModel.users.first(where: { $0.id == userId }) {
+            selectedChatUser = user
         }
     }
 
@@ -643,6 +788,12 @@ struct DirectMessagesTab: View {
         .task {
             await usersViewModel.loadUsers()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .thokanOpenChatUser)) { notification in
+            guard let userId = notification.object as? String, !userId.isEmpty else { return }
+            Task {
+                await openChatUserFromPush(userId)
+            }
+        }
     }
 }
 
@@ -654,6 +805,7 @@ struct EmailTab: View {
     @State private var query = ""
     @State private var isComposePresented = false
     @State private var selectedMessageId: String?
+    @State private var deepLinkedMessage: DeepLinkedMailMessage?
 
     private var unreadCount: Int {
         viewModel.messages.filter { !($0.is_read ?? true) }.count
@@ -828,6 +980,19 @@ struct EmailTab: View {
         .task {
             await viewModel.fetchMailConfig()
             await viewModel.fetchInbox()
+        }
+        .sheet(item: $deepLinkedMessage) { deepLink in
+            NavigationStack {
+                EmailDetailView(viewModel: viewModel, messageId: deepLink.id)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .thokanOpenMailMessage)) { notification in
+            guard let messageId = notification.object as? String, !messageId.isEmpty else { return }
+            Task {
+                await viewModel.fetchInbox()
+                selectedMessageId = messageId
+                deepLinkedMessage = DeepLinkedMailMessage(id: messageId)
+            }
         }
     }
 }
@@ -1682,6 +1847,269 @@ struct ShopifyEventDetailView: View {
         }
         .navigationTitle("Shopify Event")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct ShopifyOrderRow: View {
+    let order: ShopifyOrderSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(order.name)
+                        .font(.system(size: 15, weight: .semibold))
+                    Text(order.customer_name.isEmpty ? order.email : order.customer_name)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Text("\(order.total_price) \(order.currency)")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+
+            HStack(spacing: 8) {
+                ShopifyStatusChip(label: order.fulfillment_status.isEmpty ? "unfulfilled" : order.fulfillment_status, tint: .blue)
+                ShopifyStatusChip(label: order.financial_status.isEmpty ? "unknown" : order.financial_status, tint: .green)
+                if !order.cancelled_at.isEmpty {
+                    ShopifyStatusChip(label: "cancelled", tint: .red)
+                }
+            }
+
+            Text(order.created_at)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+struct ShopifyWebsiteConversationRow: View {
+    let conversation: ShopifyWebsiteChatConversationSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(conversation.customer_name.isEmpty ? conversation.customer_email : conversation.customer_name)
+                        .font(.system(size: 15, weight: .semibold))
+                    Text(conversation.last_message_preview.isEmpty ? "Geen preview beschikbaar" : conversation.last_message_preview)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                Spacer()
+                if conversation.unread_count > 0 {
+                    Text("\(conversation.unread_count)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.blue, in: Capsule())
+                }
+            }
+
+            HStack {
+                Text(conversation.shop_domain.isEmpty ? conversation.status.capitalized : conversation.shop_domain)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(conversation.last_message_at)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+struct ShopifyStatusChip: View {
+    let label: String
+    let tint: Color
+
+    var body: some View {
+        Text(label.capitalized)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(tint.opacity(0.12), in: Capsule())
+    }
+}
+
+struct ShopifyOrderDetailView: View {
+    let orderId: String
+
+    @State private var viewModel = ShopifyViewModel()
+    @State private var order: ShopifyOrderDetail?
+    @State private var events: [ShopifyChatEvent] = []
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+
+    @MainActor
+    private func load() async {
+        isLoading = true
+        errorMessage = nil
+        do {
+            async let orderTask = viewModel.fetchOrder(orderId: orderId)
+            async let eventsTask = viewModel.fetchOrderEvents(orderId: orderId)
+            order = try await orderTask
+            events = try await eventsTask
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    var body: some View {
+        Group {
+            if isLoading {
+                ProgressView("Loading order...")
+            } else if let order {
+                List {
+                    Section("Overview") {
+                        LabeledContent("Order", value: order.name)
+                        LabeledContent("Customer", value: order.customer_name.isEmpty ? order.email : order.customer_name)
+                        LabeledContent("Payment", value: order.financial_status)
+                        LabeledContent("Fulfillment", value: order.fulfillment_status)
+                        LabeledContent("Total", value: "\(order.total_price) \(order.currency)")
+                        LabeledContent("Created", value: order.created_at)
+                        if !order.tags.isEmpty {
+                            LabeledContent("Tags", value: order.tags)
+                        }
+                    }
+
+                    if !order.line_items.isEmpty {
+                        Section("Line items") {
+                            ForEach(order.line_items) { item in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(item.title)
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("Qty \(item.quantity) • \(item.price) \(item.currency)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    if !item.sku.isEmpty {
+                                        Text(item.sku)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if !events.isEmpty {
+                        Section("Events") {
+                            ForEach(events) { event in
+                                ShopifyEventRow(event: event)
+                            }
+                        }
+                    }
+                }
+            } else {
+                ContentUnavailableView("Order unavailable", systemImage: "shippingbox")
+            }
+        }
+        .navigationTitle(order?.name ?? "Order")
+        .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .bottom) {
+            if let errorMessage {
+                Text(errorMessage)
+                    .foregroundStyle(.red)
+                    .padding()
+            }
+        }
+        .task {
+            await load()
+        }
+    }
+}
+
+struct ShopifyWebsiteChatConversationView: View {
+    let conversationId: String
+
+    @State private var viewModel = ShopifyViewModel()
+    @State private var conversation: ShopifyWebsiteChatConversation?
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+
+    @MainActor
+    private func load() async {
+        isLoading = true
+        errorMessage = nil
+        do {
+            conversation = try await viewModel.fetchWebsiteChatConversation(conversationId: conversationId)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    var body: some View {
+        Group {
+            if isLoading {
+                ProgressView("Loading website chat...")
+            } else if let conversation {
+                List {
+                    Section("Customer") {
+                        LabeledContent("Name", value: conversation.customer_name.isEmpty ? "-" : conversation.customer_name)
+                        LabeledContent("Email", value: conversation.customer_email.isEmpty ? "-" : conversation.customer_email)
+                        LabeledContent("Phone", value: conversation.customer_phone.isEmpty ? "-" : conversation.customer_phone)
+                        LabeledContent("Status", value: conversation.status)
+                    }
+
+                    if !conversation.page_url.isEmpty {
+                        Section("Source") {
+                            Text(conversation.page_url)
+                                .font(.footnote)
+                        }
+                    }
+
+                    Section("Messages") {
+                        ForEach(conversation.messages) { message in
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    Text(message.direction.capitalized)
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(message.direction == "inbound" ? .blue : .green)
+                                    Spacer()
+                                    Text(message.sent_at)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Text(message.message)
+                                    .font(.body)
+                                if !message.author_name.isEmpty || !message.author_email.isEmpty {
+                                    Text([message.author_name, message.author_email].filter { !$0.isEmpty }.joined(separator: " • "))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
+            } else {
+                ContentUnavailableView("Conversation unavailable", systemImage: "bubble.left.and.bubble.right")
+            }
+        }
+        .navigationTitle(((conversation?.customer_name ?? "").isEmpty == false) ? (conversation?.customer_name ?? "Website chat") : "Website chat")
+        .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .bottom) {
+            if let errorMessage {
+                Text(errorMessage)
+                    .foregroundStyle(.red)
+                    .padding()
+            }
+        }
+        .task {
+            await load()
+        }
     }
 }
 

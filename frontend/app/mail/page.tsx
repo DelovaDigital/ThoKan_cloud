@@ -74,7 +74,7 @@ type ActiveFolder = "inbox" | "sent";
 type SortOrder = "newest" | "oldest" | "subject" | "sender";
 
 const MAIL_NOTIFICATION_STORAGE_KEY = "mail-last-message-id";
-const MAIL_POLL_INTERVAL_MS = 60_000;
+const MAIL_POLL_INTERVAL_MS = 10_000;
 
 function ensureLinksOpenExternally(rawHtml: string): string {
   const baseTag = '<base target="_blank" rel="noopener noreferrer">';
@@ -221,7 +221,32 @@ export default function MailPage() {
       void pollInboxForNotifications();
     }, MAIL_POLL_INTERVAL_MS);
 
-    return () => window.clearInterval(interval);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void pollInboxForNotifications();
+        if (activeFolder === "inbox") {
+          void loadInbox();
+        }
+      }
+    };
+
+    const handleAppActive = () => {
+      void pollInboxForNotifications();
+      if (activeFolder === "inbox") {
+        void loadInbox();
+      }
+    };
+
+    window.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("app-active", handleAppActive as EventListener);
+    window.addEventListener("network-online", handleAppActive as EventListener);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("app-active", handleAppActive as EventListener);
+      window.removeEventListener("network-online", handleAppActive as EventListener);
+    };
   }, [activeFolder, config?.has_password, inboxPage]);
 
   useEffect(() => {

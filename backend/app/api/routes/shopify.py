@@ -17,6 +17,7 @@ from app.deps import get_current_user, get_user_roles
 from app.models import SystemSetting, User
 from app.services.encryption import decrypt_bytes, encrypt_bytes
 from app.services.audit import log_event
+from app.api.routes.notifications import push_to_role_users
 
 router = APIRouter()
 
@@ -658,7 +659,7 @@ def save_shopify_website_chat_config(
 
 
 @router.post("/website-chat/ingest")
-def ingest_shopify_website_chat(payload: dict, request: Request, db: Session = Depends(get_db)):
+async def ingest_shopify_website_chat(payload: dict, request: Request, db: Session = Depends(get_db)):
     raw = _website_chat_bridge_config(db)
     if not raw or not raw.get("enabled"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shopify website chat bridge is not enabled")
@@ -669,6 +670,23 @@ def ingest_shopify_website_chat(payload: dict, request: Request, db: Session = D
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid bridge secret")
 
     conversation, created = _upsert_website_chat_message(db, payload, request)
+
+    if created:
+        try:
+            sender = str(payload.get("customer_name") or payload.get("email") or "Klant").strip() or "Klant"
+            message_body = str(payload.get("message") or payload.get("body") or "").strip()
+            push_body = message_body[:120] if message_body else "Nieuw websitechat bericht"
+            conv_id = conversation.get("conversation_id") or ""
+            await push_to_role_users(
+                db,
+                settings.shopify_push_target_role.strip() or "admin",
+                f"Websitechat van {sender}",
+                push_body,
+                user_info={"target_tab": 4, "shopify_chat_conversation_id": conv_id},
+            )
+        except Exception:
+            pass
+
     return {
         "ok": True,
         "stored": created,

@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Activity, ArrowUpRight, Boxes, HardDrive, PackageCheck, RefreshCw, Server, ShoppingCart, Sparkles } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { PageTransition } from "@/components/page-transition";
 import { api } from "@/lib/api";
+import { sendBrowserNotification } from "@/lib/browser-notifications";
 
 type DashboardData = {
   used_bytes: number;
@@ -93,6 +94,9 @@ type ShopifyOrderEvent = {
   message: string;
 };
 
+const DASHBOARD_POLL_INTERVAL_MS = 15_000;
+const ORDER_DETAIL_POLL_INTERVAL_MS = 10_000;
+
 function ProgressBar({ current, total, color = "bg-accent" }: { current: number; total: number; color?: string }) {
   const percent = total > 0 ? Math.min((current / total) * 100, 100) : 0;
   return (
@@ -177,20 +181,78 @@ export default function DashboardPage() {
   const [gelatoStatusLoading, setGelatoStatusLoading] = useState(false);
   const [gelatoStatusError, setGelatoStatusError] = useState("");
   const [loading, setLoading] = useState(true);
+  const orderSnapshotRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
-    loadData();
+    void loadData();
+
+    const interval = window.setInterval(() => {
+      void loadData(false);
+    }, DASHBOARD_POLL_INTERVAL_MS);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void loadData(false);
+      }
+    };
+
+    const handleAppActive = () => {
+      void loadData(false);
+    };
+
+    window.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("app-active", handleAppActive as EventListener);
+    window.addEventListener("network-online", handleAppActive as EventListener);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("app-active", handleAppActive as EventListener);
+      window.removeEventListener("network-online", handleAppActive as EventListener);
+    };
   }, []);
 
-  async function loadData() {
-    setLoading(true);
+  useEffect(() => {
+    if (!selectedOrder?.id) return;
+    const interval = window.setInterval(() => {
+      void refreshOrderDetail(selectedOrder.id, true);
+    }, ORDER_DETAIL_POLL_INTERVAL_MS);
+    return () => window.clearInterval(interval);
+  }, [selectedOrder?.id]);
+
+  async function loadData(showLoader = true) {
+    if (showLoader) {
+      setLoading(true);
+    }
     try {
       const result = await api<DashboardData>("/dashboard");
       setData(result);
 
       try {
         const shopifyOrders = await api<{ orders: ShopifyOrder[] }>("/shopify/orders?limit=10");
-        setOrders(shopifyOrders.orders || []);
+        const nextOrders = shopifyOrders.orders || [];
+        const nextSnapshot: Record<string, string> = {};
+        for (const order of nextOrders) {
+          nextSnapshot[order.id] = `${order.fulfillment_status || ""}|${order.financial_status || ""}|${order.total_price || ""}`;
+        }
+
+        const previousSnapshot = orderSnapshotRef.current;
+        const hadSnapshot = Object.keys(previousSnapshot).length > 0;
+        if (hadSnapshot) {
+          for (const order of nextOrders) {
+            const previous = previousSnapshot[order.id];
+            const current = nextSnapshot[order.id];
+            if (previous && previous !== current) {
+              sendBrowserNotification(`Order update: ${order.name}`, {
+                body: `Status: ${order.fulfillment_status || "-"} • Betaling: ${order.financial_status || "-"}`,
+                tag: `order-update-${order.id}`,
+              });
+            }
+          }
+        }
+
+        orderSnapshotRef.current = nextSnapshot;
+        setOrders(nextOrders);
         setOrdersError("");
       } catch (err) {
         setOrders([]);
@@ -201,29 +263,49 @@ export default function DashboardPage() {
       setOrders([]);
       setOrdersError("Dashboard laden mislukt");
     }
-    setLoading(false);
+    if (showLoader) {
+      setLoading(false);
+    }
   }
 
   async function openOrderDetail(orderId: string) {
     setOrderDetailLoading(true);
-    setOrderDetailError("");
-    setOrderEvents([]);
-    setOrderEventsError("");
-    setGelatoStatus(null);
-    setGelatoStatusError("");
+    await refreshOrderDetail(orderId, false);
+    setOrderDetailLoading(false);
+  }
+
+  async function refreshOrderDetail(orderId: string, quiet = true) {
+    if (!quiet) {
+      setOrderDetailError("");
+      setOrderEvents([]);
+      setOrderEventsError("");
+      setGelatoStatus(null);
+      setGelatoStatusError("");
+    }
+
     try {
       const [detail, eventsResult] = await Promise.all([
         api<ShopifyOrderDetail>(`/shopify/orders/${orderId}`),
         loadOrderEvents(orderId),
       ]);
+
+      const previous = selectedOrder;
       setSelectedOrder(detail);
       setOrderEvents(eventsResult);
-      loadGelatoStatus(orderId);
+      await loadGelatoStatus(orderId);
+
+      if (previous && (previous.fulfillment_status !== detail.fulfillment_status || previous.financial_status !== detail.financial_status)) {
+        sendBrowserNotification(`Order gewijzigd: ${detail.name}`, {
+          body: `Afhandeling: ${detail.fulfillment_status || "-"} • Betaling: ${detail.financial_status || "-"}`,
+          tag: `order-detail-${detail.id}`,
+        });
+      }
     } catch (err) {
-      setOrderDetailError(err instanceof Error ? err.message : "Besteldetails laden mislukt");
-      setSelectedOrder(null);
+      if (!quiet) {
+        setOrderDetailError(err instanceof Error ? err.message : "Besteldetails laden mislukt");
+        setSelectedOrder(null);
+      }
     }
-    setOrderDetailLoading(false);
   }
 
   async function loadOrderEvents(orderId: string) {
@@ -242,7 +324,6 @@ export default function DashboardPage() {
       setOrderEventsLoading(false);
     }
   }
-
   async function loadGelatoStatus(orderId: string) {
     setGelatoStatusLoading(true);
     setGelatoStatusError("");
@@ -366,7 +447,7 @@ export default function DashboardPage() {
               </p>
             </div>
             <button
-              onClick={loadData}
+              onClick={() => void loadData()}
               disabled={loading}
               className="btn-secondary shrink-0"
             >

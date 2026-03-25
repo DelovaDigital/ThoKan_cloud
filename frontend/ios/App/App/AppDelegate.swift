@@ -1,5 +1,6 @@
 import UIKit
 import BackgroundTasks
+import UserNotifications
 
 class AppDelegate: UIResponder, UIApplicationDelegate {
     private let syncTaskIdentifier = "com.thokan.cloud.sync"
@@ -8,6 +9,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         BGTaskScheduler.shared.register(forTaskWithIdentifier: syncTaskIdentifier, using: nil) { task in
             self.handleSyncTask(task: task as! BGProcessingTask)
         }
+
+        // Set the notification delegate early so taps on banners work even when
+        // the app was killed (AppNotificationMonitor will take over once logged in).
+        UNUserNotificationCenter.current().delegate = self
 
         scheduleSyncTask()
         return true
@@ -51,5 +56,38 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
         NotificationCenter.default.post(name: .thokanDeviceTokenUpdated, object: "")
+    }
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .list, .sound, .badge])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        defer { completionHandler() }
+        let userInfo = response.notification.request.content.userInfo
+        guard let tab = userInfo["target_tab"] as? Int else { return }
+        NotificationCenter.default.post(name: .thokanOpenTab, object: tab)
+        if let userId = userInfo["chat_user_id"] as? String, !userId.isEmpty {
+            NotificationCenter.default.post(name: .thokanOpenChatUser, object: userId)
+        }
+        if let messageId = userInfo["mail_message_id"] as? String, !messageId.isEmpty {
+            NotificationCenter.default.post(name: .thokanOpenMailMessage, object: messageId)
+        }
+        if let orderId = userInfo["shopify_order_id"] as? String, !orderId.isEmpty {
+            NotificationCenter.default.post(name: .thokanOpenShopifyOrder, object: orderId)
+        }
+        if let conversationId = userInfo["shopify_chat_conversation_id"] as? String, !conversationId.isEmpty {
+            NotificationCenter.default.post(name: .thokanOpenShopifyConversation, object: conversationId)
+        }
     }
 }

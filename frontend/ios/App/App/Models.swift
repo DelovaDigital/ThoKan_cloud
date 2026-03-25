@@ -54,7 +54,7 @@ struct ShopifyChatFeedResponse: Codable {
     let orders_checked: Int
 }
 
-struct ShopifyChatEvent: Codable {
+struct ShopifyChatEvent: Codable, Identifiable {
     let id: String
     let created_at: String
     let author: String
@@ -68,6 +68,142 @@ struct ShopifyChatEvent: Codable {
     let fulfillment_status: String
     let total_price: String
     let currency: String
+}
+
+struct ShopifyOrdersResponse: Codable {
+    let orders: [ShopifyOrderSummary]
+    let count: Int
+}
+
+struct ShopifyOrderSummary: Codable, Identifiable {
+    let id: String
+    let name: String
+    let email: String
+    let customer_name: String
+    let financial_status: String
+    let fulfillment_status: String
+    let currency: String
+    let total_price: String
+    let created_at: String
+    let tags: String
+    let cancelled_at: String
+}
+
+struct ShopifyShippingLine: Codable {
+    let title: String
+    let code: String
+    let price: String
+}
+
+struct ShopifyNoteAttribute: Codable, Identifiable {
+    let name: String
+    let value: String
+
+    var id: String { "\(name):\(value)" }
+}
+
+struct ShopifyOrderLineItem: Codable, Identifiable {
+    let id: String
+    let title: String
+    let sku: String
+    let quantity: Int
+    let price: String
+    let currency: String
+}
+
+struct ShopifyOrderDetail: Codable, Identifiable {
+    let id: String
+    let name: String
+    let email: String
+    let customer_name: String
+    let financial_status: String
+    let fulfillment_status: String
+    let currency: String
+    let total_price: String
+    let subtotal_price: String
+    let total_tax: String
+    let total_discounts: String
+    let created_at: String
+    let processed_at: String
+    let note: String
+    let tags: String
+    let order_status_url: String
+    let source_name: String
+    let cancelled_at: String
+    let cancel_reason: String
+    let discount_codes: [String]
+    let payment_gateway_names: [String]
+    let shipping_lines: [ShopifyShippingLine]
+    let note_attributes: [ShopifyNoteAttribute]
+    let shipping_address: [String]
+    let billing_address: [String]
+    let line_items: [ShopifyOrderLineItem]
+}
+
+struct ShopifyOrderEventsResponse: Codable {
+    let events: [ShopifyChatEvent]
+    let count: Int
+}
+
+struct ShopifyWebsiteChatInboxResponse: Codable {
+    let conversations: [ShopifyWebsiteChatConversationSummary]
+    let count: Int
+    let unread_conversations: Int
+    let unread_messages: Int
+}
+
+struct ShopifyWebsiteChatConversationSummary: Codable, Identifiable {
+    let conversation_id: String
+    let source: String
+    let status: String
+    let customer_name: String
+    let customer_email: String
+    let customer_phone: String
+    let page_url: String
+    let shop_domain: String
+    let last_message_at: String
+    let last_message_preview: String
+    let last_message_id: String
+    let unread_count: Int
+    let message_count: Int
+
+    var id: String { conversation_id }
+}
+
+struct ShopifyWebsiteChatMessage: Codable, Identifiable {
+    let id: String
+    let direction: String
+    let message: String
+    let sent_at: String
+    let author_name: String
+    let author_email: String
+    let page_url: String
+}
+
+struct ShopifyWebsiteChatConversation: Codable, Identifiable {
+    let conversation_id: String
+    let source: String
+    let status: String
+    let customer_name: String
+    let customer_email: String
+    let customer_phone: String
+    let page_url: String
+    let shop_domain: String
+    let last_message_at: String
+    let last_message_preview: String
+    let last_message_id: String
+    let unread_count: Int
+    let messages: [ShopifyWebsiteChatMessage]
+
+    var id: String { conversation_id }
+}
+
+struct DeepLinkedShopifyOrder: Identifiable {
+    let id: String
+}
+
+struct DeepLinkedShopifyConversation: Identifiable {
+    let id: String
 }
 
 // MARK: - File Models
@@ -137,6 +273,10 @@ struct MailMessage: Codable {
     let date: String
     let snippet: String
     let is_read: Bool?
+}
+
+struct DeepLinkedMailMessage: Identifiable {
+    let id: String
 }
 
 struct MailDetail: Decodable {
