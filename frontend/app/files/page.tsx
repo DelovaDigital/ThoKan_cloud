@@ -542,76 +542,6 @@ export default function FilesPage() {
           </div>
         )}
 
-        <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
-          <section className="section-block">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.14em] opacity-65">Navigatie</h2>
-            <div className="mt-3 space-y-2">
-              <button
-                onClick={() => setCurrentFolderId(null)}
-                className={`flex w-full items-center justify-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-                  currentFolderId === null ? "bg-accent text-white" : "hover:bg-card/70"
-                }`}
-              >
-                <HardDrive className="h-4 w-4 shrink-0 opacity-80" />
-                Mijn bestanden
-              </button>
-              <button onClick={navigateUp} disabled={!currentFolder} className="btn-secondary w-full disabled:opacity-50">
-                Niveau omhoog
-              </button>
-            </div>
-
-            <div className="mt-4 border-t border-border pt-4">
-              <p className="text-xs uppercase tracking-[0.14em] opacity-60">Mijn bestanden</p>
-              <div className="mt-2">
-                <UploadDropzone onUploaded={loadFiles} folderId={null} />
-              </div>
-            </div>
-
-            <div className="mt-4 border-t border-border pt-4">
-              <form onSubmit={createFolder} className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.14em] opacity-60">Nieuwe map</p>
-                <input
-                  value={newFolder}
-                  onChange={(e) => setNewFolder(e.target.value)}
-                  placeholder="Mapnaam"
-                  className="field-input"
-                />
-                <button className="btn-primary w-full">Aanmaken</button>
-              </form>
-            </div>
-          </section>
-
-          <section className="section-block">
-            <div className="flex items-start gap-4 border-b border-border/60 pb-4">
-              <h2 className="text-base font-semibold">Locatie</h2>
-              <span className="ml-2 rounded-md bg-card px-2 py-0.5 font-mono text-xs opacity-60">{currentPath}</span>
-            </div>
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => setCurrentFolderId(null)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                  currentFolderId === null ? "bg-accent text-white" : "border border-border hover:bg-card/70"
-                }`}
-              >
-                Start
-              </button>
-              {breadcrumbs.map((crumb, i) => {
-                const folderForCrumb = folders.find((f) => f.path === "/" + breadcrumbs.slice(0, i + 1).join("/"));
-                return (
-                  <div key={i} className="flex items-center gap-2">
-                    <ChevronRight className="h-4 w-4 opacity-35" />
-                    <button
-                      onClick={() => setCurrentFolderId(folderForCrumb?.id || null)}
-                      className="rounded-lg border border-border px-3 py-1.5 text-sm transition hover:bg-card/70"
-                    >
-                      {crumb}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        </div>
 
         <section className="section-block sticky top-[92px] z-10">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -651,16 +581,58 @@ export default function FilesPage() {
 
         <div className="grid gap-4 xl:grid-cols-1">
           <section className="section-block">
-            <div className="mb-5 flex items-center justify-between gap-3 border-b border-border/60 pb-5">
-              <div>
-                <h2 className="text-lg font-semibold">{currentFolder ? currentFolder.name : "Mijn bestanden"}</h2>
-                <p className="mt-1 text-sm opacity-60">{filteredFiles.length} bestanden · {visibleFolders.length} mappen</p>
+            <div className="mb-5 border-b border-border/60 pb-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold">{currentFolder ? currentFolder.name : "Mijn bestanden"}</h2>
+                  <p className="mt-1 text-sm opacity-60">{filteredFiles.length} bestanden · {visibleFolders.length} mappen</p>
+                </div>
+                {currentFolder && (
+                  <button onClick={navigateUp} className="rounded-2xl border border-border px-3 py-2 text-sm transition hover:bg-card/70">
+                    ← Terug
+                  </button>
+                )}
               </div>
-              {currentFolder && (
-                <button onClick={navigateUp} className="rounded-2xl border border-border px-3 py-2 text-sm transition hover:bg-card/70">
-                  ← Terug
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="rounded-md bg-card px-2 py-0.5 font-mono text-xs opacity-60">{currentPath}</span>
+                <button
+                  onClick={() => setCurrentFolderId(null)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                    currentFolderId === null ? "bg-accent text-white" : "border border-border hover:bg-card/70"
+                  }`}
+                >
+                  Start
                 </button>
-              )}
+                {breadcrumbs.map((crumb, i) => {
+                  const folderForCrumb = folders.find((f) => f.path === "/" + breadcrumbs.slice(0, i + 1).join("/"));
+                  return (
+                    <div key={i} className="flex items-center gap-2">
+                      <ChevronRight className="h-4 w-4 opacity-35" />
+                      <button
+                        onClick={() => setCurrentFolderId(folderForCrumb?.id || null)}
+                        className="rounded-lg border border-border px-3 py-1.5 text-sm transition hover:bg-card/70"
+                      >
+                        {crumb}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
+                <UploadDropzone onUploaded={loadFiles} folderId={null} />
+                <form onSubmit={createFolder} className="space-y-2 rounded-lg border border-border p-3">
+                  <p className="text-xs uppercase tracking-[0.14em] opacity-60">Nieuwe map</p>
+                  <input
+                    value={newFolder}
+                    onChange={(e) => setNewFolder(e.target.value)}
+                    placeholder="Mapnaam"
+                    className="field-input"
+                  />
+                  <button className="btn-primary w-full">Aanmaken</button>
+                </form>
+              </div>
             </div>
 
             <div className="space-y-2">
