@@ -50,7 +50,7 @@ export default function RegisterPage() {
 
       localStorage.setItem("access_token", loginResponse.access_token);
       
-      router.push("/dashboard");
+      router.push("/workspace");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registratie mislukt");
     } finally {

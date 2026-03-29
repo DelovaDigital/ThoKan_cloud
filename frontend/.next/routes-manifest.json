@@ -91,6 +91,12 @@
       "regex": "^/shopify(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/shopify(?:/)?$"
+    },
+    {
+      "page": "/workspace",
+      "regex": "^/workspace(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/workspace(?:/)?$"
     }
   ],
   "dataRoutes": [],

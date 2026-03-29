@@ -210,6 +210,7 @@ struct LoginView: View {
 struct MainTabView: View {
     @Environment(AuthenticationViewModel.self) private var authViewModel
     @State private var notificationMonitor = AppNotificationMonitor()
+    @AppStorage("nativeSelectedTab") private var storedSelectedTab = 0
     @State private var selectedTab = 0
 
     private var isAdmin: Bool {
@@ -264,6 +265,7 @@ struct MainTabView: View {
         }
         .tint(.blue)
         .task {
+            selectedTab = max(0, storedSelectedTab)
             notificationMonitor.start()
             _ = await BackgroundSyncCoordinator.shared.processQueuedActions()
         }
@@ -272,13 +274,21 @@ struct MainTabView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .thokanOpenTab)) { notification in
             guard let tab = notification.object as? Int else { return }
-            selectedTab = tab
+            if isAdmin {
+                selectedTab = min(tab, 6)
+            } else {
+                selectedTab = min(tab, 5)
+            }
+            storedSelectedTab = selectedTab
         }
         .onReceive(NotificationCenter.default.publisher(for: .thokanDeviceTokenUpdated)) { notification in
             guard let token = notification.object as? String, !token.isEmpty else { return }
             Task {
                 try? await APIClient.shared.registerDeviceToken(token)
             }
+        }
+        .onChange(of: selectedTab) { _, newValue in
+            storedSelectedTab = newValue
         }
     }
 }
