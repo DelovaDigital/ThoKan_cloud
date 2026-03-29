@@ -1,18 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { App } from '@capacitor/app';
 import { Network } from '@capacitor/network';
 import { Capacitor } from '@capacitor/core';
 
 export function CapacitorProviders() {
-  const [isNetworkReady, setIsNetworkReady] = useState(false);
-
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) {
-      setIsNetworkReady(true);
+      document.body.classList.add('platform-web');
       return;
     }
+
+    const platform = Capacitor.getPlatform();
+    document.body.classList.add('platform-native', `platform-${platform}`);
 
     // Prevent default back button behavior on Android
     const handleAppBackButton = async () => {
@@ -34,9 +35,11 @@ export function CapacitorProviders() {
         if (status.connected) {
           localStorage.setItem('isOnline', 'true');
           console.log('[Network] Connected to thokan.cloud on startup');
+          window.dispatchEvent(new CustomEvent('network-online'));
         } else {
           localStorage.setItem('isOnline', 'false');
           console.warn('[Network] No connection available at startup');
+          window.dispatchEvent(new CustomEvent('network-offline'));
         }
 
         if (Capacitor.getPlatform() === 'android') {
@@ -63,18 +66,17 @@ export function CapacitorProviders() {
           }
         });
 
-        setIsNetworkReady(true);
       } catch (error) {
         console.error('[Network] Setup error:', error);
         // Assume online if we can't check network status
         localStorage.setItem('isOnline', 'true');
-        setIsNetworkReady(true);
       }
     };
 
     void setupListeners();
 
     return () => {
+      document.body.classList.remove('platform-native', `platform-${platform}`);
       void appBackButtonListener?.remove();
       void appStateListener?.remove();
       void networkListener?.remove();

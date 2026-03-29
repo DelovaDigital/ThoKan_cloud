@@ -61,7 +61,7 @@ export function LoginPage() {
         // Ignore storage errors.
       }
 
-      window.location.replace("/dashboard");
+      window.location.replace("/workspace");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Inloggen mislukt");
     } finally {

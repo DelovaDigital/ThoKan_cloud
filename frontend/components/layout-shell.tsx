@@ -7,7 +7,7 @@ import { Capacitor } from "@capacitor/core";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Folder,
-  LayoutGrid,
+  House,
   LogOut,
   Mail,
   MessageSquare,
@@ -25,13 +25,22 @@ import { ensureSession, getApiBase } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const items = [
-  { href: "/dashboard", label: "Overzicht",    icon: LayoutGrid },
+  { href: "/workspace", label: "Workspace",    icon: House },
+  { href: "/dashboard", label: "Analyse",      icon: Smartphone },
   { href: "/files",     label: "Bestanden",    icon: Folder },
-  { href: "/shopify",   label: "Shopify",      icon: MessageSquareText },
+  { href: "/shopify",   label: "Orders",       icon: MessageSquareText },
   { href: "/chat",      label: "Chat",         icon: MessageSquare },
   { href: "/mail",      label: "E-mail",       icon: Mail },
   { href: "/admin",     label: "Admin",        icon: Shield },
   { href: "/settings",  label: "Instellingen", icon: Settings },
+];
+
+const mobileItems = [
+  { href: "/workspace", label: "Home", icon: House },
+  { href: "/files", label: "Files", icon: Folder },
+  { href: "/mail", label: "Mail", icon: Mail },
+  { href: "/shopify", label: "Orders", icon: MessageSquareText },
+  { href: "/settings", label: "Instel", icon: Settings },
 ];
 
 /* ─── Sidebar width constants ──────────────────────────────── */
@@ -236,7 +245,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
         <main className="px-3 py-3">{children}</main>
         <nav className="bottom-safe-lift fixed inset-x-0 z-30 border-t border-border bg-card/95 backdrop-blur-md">
           <div className="flex items-center justify-around px-1 py-1">
-            {items.map((item) => {
+            {mobileItems.map((item) => {
               const active = pathname.startsWith(item.href);
               const Icon   = item.icon;
               return (
@@ -302,7 +311,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold leading-tight">ThoKan</p>
-                  <p className="truncate text-[11px] text-muted">Cloud Platform</p>
+                  <p className="truncate text-[11px] text-muted">Cloud Command</p>
                 </div>
               </motion.div>
             ) : (

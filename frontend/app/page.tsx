@@ -53,7 +53,7 @@ export default function HomePage() {
             ThoKan Cloud bundelt alle modules in een eenvoudige interface met vaste navigatie en consistente schermopbouw.
           </p>
           <div className="mt-5 flex flex-wrap gap-2.5">
-            <Link href="/login" className="btn-primary">
+            <Link href="/workspace" className="btn-primary">
               Open werkruimte
               <ArrowRight className="h-4 w-4" />
             </Link>
