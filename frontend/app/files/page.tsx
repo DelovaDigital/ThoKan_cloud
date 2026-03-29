@@ -529,10 +529,6 @@ export default function FilesPage() {
           </div>
         </section>
 
-        <section className="section-block">
-          <UploadDropzone onUploaded={loadFiles} folderId={currentFolderId} />
-        </section>
-
         {userNotice && (
           <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm">
             <div className="h-2 w-2 shrink-0 rounded-full bg-accent" />
@@ -562,6 +558,13 @@ export default function FilesPage() {
               <button onClick={navigateUp} disabled={!currentFolder} className="btn-secondary w-full disabled:opacity-50">
                 Niveau omhoog
               </button>
+            </div>
+
+            <div className="mt-4 border-t border-border pt-4">
+              <p className="text-xs uppercase tracking-[0.14em] opacity-60">Mijn bestanden</p>
+              <div className="mt-2">
+                <UploadDropzone onUploaded={loadFiles} folderId={null} />
+              </div>
             </div>
 
             <div className="mt-4 border-t border-border pt-4">
