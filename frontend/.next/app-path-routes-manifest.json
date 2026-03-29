@@ -1,15 +1,15 @@
 {
   "/_not-found/page": "/_not-found",
-  "/chat/page": "/chat",
-  "/admin/page": "/admin",
-  "/dashboard/page": "/dashboard",
-  "/login/page": "/login",
-  "/register/page": "/register",
   "/files/page": "/files",
-  "/page": "/",
+  "/admin/page": "/admin",
+  "/shopify/page": "/shopify",
+  "/chat/page": "/chat",
+  "/settings/page": "/settings",
   "/mail/page": "/mail",
   "/restarting/page": "/restarting",
-  "/settings/page": "/settings",
-  "/shopify/page": "/shopify",
-  "/workspace/page": "/workspace"
+  "/page": "/",
+  "/workspace/page": "/workspace",
+  "/dashboard/page": "/dashboard",
+  "/login/page": "/login",
+  "/register/page": "/register"
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, Bell, BellRing, FileText, MessageSquareText, PackageCheck, RefreshCw, ShoppingBag, Star, UserRound } from "lucide-react";
+import { ArrowUpRight, Bell, BellRing, MessageSquareText, PackageCheck, RefreshCw, ShoppingBag, Star, UserRound } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { PageTransition } from "@/components/page-transition";
 import { api } from "@/lib/api";
@@ -88,11 +88,11 @@ function formatWebsiteChatNotificationTitle(conversation: WebsiteChatConversatio
 type CommerceModule = {
   title: string;
   status: string;
-  description: string;
   href?: string;
 };
 
 export default function ShopifyPage() {
+  const [showOrderActivity, setShowOrderActivity] = useState(false);
   const [events, setEvents] = useState<ShopifyEvent[]>([]);
   const [chatConversations, setChatConversations] = useState<WebsiteChatConversation[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState("");
@@ -112,6 +112,11 @@ export default function ShopifyPage() {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
 
   useEffect(() => {
+    const storedPreference = window.localStorage.getItem("web-shopify-show-order-activity");
+    if (storedPreference === "1") {
+      setShowOrderActivity(true);
+    }
+
     setNotificationPermission(getBrowserNotificationPermission());
     void refreshWorkspace(false);
 
@@ -142,6 +147,17 @@ export default function ShopifyPage() {
   }, []);
 
   useEffect(() => {
+    window.localStorage.setItem("web-shopify-show-order-activity", showOrderActivity ? "1" : "0");
+    if (!showOrderActivity) {
+      setEvents([]);
+      setOrdersChecked(0);
+      setEventError("");
+      return;
+    }
+    void loadEventFeed(false);
+  }, [showOrderActivity]);
+
+  useEffect(() => {
     if (!selectedConversationId) {
       setSelectedConversation(null);
       return;
@@ -157,7 +173,12 @@ export default function ShopifyPage() {
       setLoading(true);
     }
 
-    await Promise.all([loadEventFeed(shouldNotify), loadWebsiteChats(shouldNotify)]);
+    const tasks: Promise<unknown>[] = [loadWebsiteChats(shouldNotify)];
+    if (showOrderActivity) {
+      tasks.push(loadEventFeed(shouldNotify));
+    }
+
+    await Promise.all(tasks);
 
     setLoading(false);
     setRefreshing(false);
@@ -344,23 +365,19 @@ export default function ShopifyPage() {
       {
         title: "Website chat",
         status: unreadMessages > 0 ? `${unreadMessages} nieuw` : "Live bridge",
-        description: "Centrale inbox voor webshopchat die via de ThoKan bridge binnenkomt en direct met ordercontext combineert.",
       },
       {
         title: "Shopify signalen",
         status: `${events.length} events`,
-        description: "Orderevents, klantstatus en storefront activiteit blijven in dezelfde cockpit als chat en fulfilment.",
       },
       {
         title: "Gelato fulfilment",
         status: "Klaar via dashboard",
-        description: "Gebruik de orderdetail- en Gelato-routes in dashboard en instellingen om productmapping en fulfilmentflow te beheren.",
         href: "/dashboard",
       },
       {
         title: "Reviews en forms",
         status: "Integratiebasis",
-        description: "De UX-laag is voorbereid om ook reviews, formulieren en extra storefront events in deze commerce workspace te laten landen zodra de webhook/API routes zijn toegevoegd.",
         href: "/settings",
       },
     ];
@@ -378,9 +395,6 @@ export default function ShopifyPage() {
                 Commerce cockpit
               </div>
               <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Shopify & Fulfilment</h1>
-              <p className="mt-1.5 text-sm text-muted">
-                Websitechat, orderactiviteit en Gelato-fulfilment in één werkruimte.
-              </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
@@ -431,9 +445,6 @@ export default function ShopifyPage() {
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold">Commerce modules</h2>
-              <p className="mt-1 text-sm text-muted">
-                Een bredere laag voor storefront operations: chat, orderobservatie, fulfilment en uitbreidbare modules zoals reviews en forms.
-              </p>
             </div>
             <div className="rounded-full border border-border bg-bg px-3 py-1 text-xs font-medium text-muted">
               UX afgestemd op snelle opvolging
@@ -458,7 +469,6 @@ export default function ShopifyPage() {
                     <Star className="h-5 w-5 text-accent" />
                   )}
                 </div>
-                <p className="mt-3 text-sm text-muted">{module.description}</p>
                 {module.href && (
                   <Link href={module.href} className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-accent hover:underline">
                     Open module
@@ -469,21 +479,8 @@ export default function ShopifyPage() {
             ))}
           </div>
 
-          <div className="mt-4 rounded-xl border border-border bg-bg p-4">
-            <div className="grid gap-3 lg:grid-cols-3">
-              <div className="rounded-xl border border-border bg-card p-4">
-                <p className="text-sm font-medium">Webshop chat</p>
-                <p className="mt-2 text-sm text-muted">Actief via de website-chat bridge en zichtbaar als gedeelde inbox voor support en sales.</p>
-              </div>
-              <div className="rounded-xl border border-border bg-card p-4">
-                <p className="text-sm font-medium">Reviews</p>
-                <p className="mt-2 text-sm text-muted">Nog geen backend route, maar deze cockpit is voorbereid om review events of moderation later naast chat te tonen.</p>
-              </div>
-              <div className="rounded-xl border border-border bg-card p-4">
-                <p className="text-sm font-medium">Forms</p>
-                <p className="mt-2 text-sm text-muted">Form submissions kunnen later via dezelfde bridge/webhook aanpak binnenkomen zodat lead capture en supportvragen niet versnipperd raken.</p>
-              </div>
-            </div>
+          <div className="mt-4 rounded-xl border border-border bg-bg p-4 text-sm text-muted">
+            Actieve modules: chat, signalen, fulfilment.
           </div>
         </section>
 
@@ -491,9 +488,6 @@ export default function ShopifyPage() {
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold">Websitechats</h2>
-              <p className="mt-1 text-sm text-muted">
-                Deze inbox toont berichten die je website of middleware naar de Shopify website-chat bridge in Cloud doorstuurt.
-              </p>
             </div>
             <div className="rounded-full bg-accent/15 px-3 py-1 text-xs font-medium text-accent">
               {unreadConversations} gesprekken met nieuwe berichten
@@ -559,7 +553,7 @@ export default function ShopifyPage() {
                 })
               ) : (
                 <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
-                  Geen websitechats gevonden. Schakel eerst de bridge in via Instellingen en laat je website of middleware berichten doorsturen.
+                  Geen websitechats gevonden.
                 </div>
               )}
             </aside>
@@ -715,109 +709,108 @@ export default function ShopifyPage() {
           {browserNotificationsSupported() && notificationPermission === "granted" && (
             <div className="mt-5 inline-flex items-center gap-2 rounded-xl border border-border bg-bg px-4 py-2 text-sm text-muted">
               <BellRing className="h-4 w-4 text-accent" />
-              Browsermeldingen zijn actief voor websitechats en Shopify events.
+              Browsermeldingen zijn actief.
             </div>
           )}
-
-          <div className="mt-5 rounded-xl border border-border bg-bg p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-sm font-medium">Volgende uitbreidingen in deze commerce workspace</p>
-                <p className="mt-1 text-sm text-muted">
-                  Zodra de backend API’s toegevoegd zijn, kunnen reviews, embedded forms en extra storefront events hier zonder nieuw navigatiepatroon landen.
-                </p>
-              </div>
-              <Link href="/settings" className="btn-secondary px-3 py-2 text-sm">
-                <FileText className="h-4 w-4" />
-                Integraties beheren
-              </Link>
-            </div>
-          </div>
         </section>
 
         <section className="section-block">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold">Shopify orderevents</h2>
-              <p className="mt-1 text-sm text-muted">
-                Deze feed bundelt recente Shopify-ordergebeurtenissen tot één stroom op basis van de bestaande Admin API-integratie.
-              </p>
+              <p className="mt-1 text-sm text-muted">Toon feed enkel indien nodig.</p>
             </div>
-            <div className="rounded-full border border-border bg-bg px-3 py-1 text-xs font-medium text-muted">
-              Polling elke 60 seconden
-            </div>
+            <label className="inline-flex items-center gap-2 rounded-full border border-border bg-bg px-3 py-1 text-xs font-medium text-muted">
+              <input
+                type="checkbox"
+                checked={showOrderActivity}
+                onChange={(event) => setShowOrderActivity(event.target.checked)}
+                className="h-4 w-4 rounded border-border bg-transparent"
+              />
+              Toon activiteit
+            </label>
           </div>
 
-          <div className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
-            <input
-              value={eventSearch}
-              onChange={(event) => setEventSearch(event.target.value)}
-              placeholder="Zoek op bestelling, klant, auteur of bericht"
-              className="field-input"
-            />
-            <select
-              value={typeFilter}
-              onChange={(event) => setTypeFilter(event.target.value)}
-              className="field-input"
-            >
-              <option value="all">Alle types</option>
-              {eventTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-            <div className="inline-flex items-center justify-center rounded-xl border border-border bg-bg px-3 py-2 text-sm text-muted">
-              {visibleEvents.length} zichtbaar
+          {!showOrderActivity && (
+            <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
+              Orderactiviteit is verborgen.
             </div>
-          </div>
+          )}
 
-          {eventError && <p className="mt-4 text-sm text-red-400">{eventError}</p>}
-
-          <div className="mt-5 space-y-3">
-            {loading ? (
-              <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
-                Shopify events laden...
+          {showOrderActivity && (
+            <>
+              <div className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
+                <input
+                  value={eventSearch}
+                  onChange={(event) => setEventSearch(event.target.value)}
+                  placeholder="Zoek op bestelling, klant, auteur of bericht"
+                  className="field-input"
+                />
+                <select
+                  value={typeFilter}
+                  onChange={(event) => setTypeFilter(event.target.value)}
+                  className="field-input"
+                >
+                  <option value="all">Alle types</option>
+                  {eventTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+                <div className="inline-flex items-center justify-center rounded-xl border border-border bg-bg px-3 py-2 text-sm text-muted">
+                  {visibleEvents.length} zichtbaar
+                </div>
               </div>
-            ) : visibleEvents.length > 0 ? (
-              visibleEvents.map((event) => (
-                <article key={event.id} className="rounded-xl border border-border bg-bg p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-accent/15 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-accent">
-                          {event.type}
-                        </span>
-                        <span className="text-xs opacity-55">{event.created_at ? new Date(event.created_at).toLocaleString() : "-"}</span>
-                      </div>
-                      <h3 className="mt-3 text-lg font-semibold">{event.order_name || "Onbekende bestelling"}</h3>
-                      <p className="mt-1 text-sm opacity-80">{event.message}</p>
-                      <div className="mt-3 flex flex-wrap items-center gap-4 text-xs opacity-65">
-                        <span className="inline-flex items-center gap-1.5">
-                          <UserRound className="h-3.5 w-3.5" />
-                          {event.customer_name || event.email || "Geen klantgegevens"}
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                          <ShoppingBag className="h-3.5 w-3.5" />
-                          {event.total_price} {event.currency}
-                        </span>
-                        <span>Betaling: {event.financial_status || "-"}</span>
-                        <span>Afhandeling: {event.fulfillment_status || "-"}</span>
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs">
-                      <p className="font-medium">{event.author || "Shopify"}</p>
-                      <p className="mt-1 opacity-60">Order ID: {event.order_id}</p>
-                    </div>
+
+              {eventError && <p className="mt-4 text-sm text-red-400">{eventError}</p>}
+
+              <div className="mt-5 space-y-3">
+                {loading ? (
+                  <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
+                    Shopify events laden...
                   </div>
-                </article>
-              ))
-            ) : (
-              <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
-                Geen Shopify-events gevonden. Controleer Shopify-configuratie of probeer later opnieuw.
+                ) : visibleEvents.length > 0 ? (
+                  visibleEvents.map((event) => (
+                    <article key={event.id} className="rounded-xl border border-border bg-bg p-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-accent/15 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-accent">
+                              {event.type}
+                            </span>
+                            <span className="text-xs opacity-55">{event.created_at ? new Date(event.created_at).toLocaleString() : "-"}</span>
+                          </div>
+                          <h3 className="mt-3 text-lg font-semibold">{event.order_name || "Onbekende bestelling"}</h3>
+                          <p className="mt-1 text-sm opacity-80">{event.message}</p>
+                          <div className="mt-3 flex flex-wrap items-center gap-4 text-xs opacity-65">
+                            <span className="inline-flex items-center gap-1.5">
+                              <UserRound className="h-3.5 w-3.5" />
+                              {event.customer_name || event.email || "Geen klantgegevens"}
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <ShoppingBag className="h-3.5 w-3.5" />
+                              {event.total_price} {event.currency}
+                            </span>
+                            <span>Betaling: {event.financial_status || "-"}</span>
+                            <span>Afhandeling: {event.fulfillment_status || "-"}</span>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs">
+                          <p className="font-medium">{event.author || "Shopify"}</p>
+                          <p className="mt-1 opacity-60">Order ID: {event.order_id}</p>
+                        </div>
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
+                    Geen Shopify-events gevonden.
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
         </section>
       </div>
       </PageTransition>

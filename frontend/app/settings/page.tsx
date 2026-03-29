@@ -171,10 +171,11 @@ function SectionShell({
   icon: ReactNode;
   eyebrow: string;
   title: string;
-  description: string;
+  description?: string;
   children: ReactNode;
   aside?: ReactNode;
 }) {
+  void description;
   return (
     <section className="section-block">
       <div className="flex flex-col gap-3 border-b border-border/60 pb-5 md:flex-row md:items-center md:justify-between">
@@ -187,7 +188,6 @@ function SectionShell({
               <h2 className="text-base font-bold">{title}</h2>
               <span className="rounded-md bg-card/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest opacity-50">{eyebrow}</span>
             </div>
-            <p className="mt-0.5 max-w-2xl text-xs opacity-55">{description}</p>
           </div>
         </div>
         {aside ? <div className="shrink-0">{aside}</div> : null}

@@ -492,7 +492,6 @@ export default function MailPage() {
           <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
             <div>
               <h1 className="text-2xl font-bold sm:text-3xl">Mailbox</h1>
-              <p className="mt-1 text-sm opacity-60">Inbox, verzonden en berichtdetail in één werkruimte.</p>
               <div className="mt-5 flex flex-wrap gap-3">
                 {browserNotificationsSupported() && notificationPermission !== "granted" && (
                   <button
@@ -565,7 +564,7 @@ export default function MailPage() {
 
         {browserNotificationsSupported() && notificationPermission === "granted" && (
           <div className="section-block text-sm opacity-75">
-            Browsermeldingen zijn actief voor nieuwe e-mail.
+            Browsermeldingen actief.
           </div>
         )}
 
@@ -624,7 +623,6 @@ export default function MailPage() {
             <div className="flex flex-col gap-4 border-b border-border/60 pb-5 md:flex-row md:items-start md:justify-between">
               <div>
                 <h2 className="text-xl font-semibold">{folderLabel}</h2>
-                <p className="mt-1 text-sm opacity-65">Zoeken, sorteren en berichtselectie blijven vast in dezelfde mailboxlaag.</p>
               </div>
               <div className="flex gap-2 text-xs">
                 <button
@@ -728,7 +726,7 @@ export default function MailPage() {
               )}
               {!currentLoad && visibleList.length === 0 && (
                 <li className="rounded-xl border border-dashed border-border p-6 text-center text-sm opacity-60">
-                  {config?.has_password ? `Geen berichten in ${folderLabel}.` : "Configureer je mailbox om berichten te laden."}
+                  {config?.has_password ? `Geen berichten in ${folderLabel}.` : "Mailbox niet geconfigureerd."}
                 </li>
               )}
             </ul>
@@ -739,7 +737,6 @@ export default function MailPage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-45">Detailkaart</p>
                 <h2 className="mt-2 text-lg font-semibold">Berichtdetail</h2>
-                <p className="mt-1 text-sm opacity-60">Afzender, inhoud en antwoord blijven vast zichtbaar naast de lijst.</p>
               </div>
               {selectedMessage && (
                 <button className="rounded-xl border border-border p-2 transition hover:bg-card/60" onClick={closeMessage} aria-label="Bericht sluiten">
@@ -754,7 +751,6 @@ export default function MailPage() {
               <div className="mt-5 flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/20 px-4 py-10 text-center">
                 <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-accent/10 text-accent"><Mail className="h-6 w-6" /></div>
                 <p className="text-sm font-semibold">Selecteer een bericht</p>
-                <p className="mt-1 max-w-[200px] text-xs opacity-55">Klik links op een bericht om de inhoud hier te lezen.</p>
               </div>
             )}
 
