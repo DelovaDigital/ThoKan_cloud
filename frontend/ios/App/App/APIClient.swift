@@ -91,6 +91,13 @@ class APIClient: NSObject {
 
     // MARK: - Shopify
 
+    private func shopifyPathURL(_ path: String) throws -> URL {
+        guard let url = URL(string: "\(baseURL)/\(path)") else {
+            throw APIError.server("Invalid Shopify URL")
+        }
+        return url
+    }
+
     func fetchShopifyChatFeed(limitOrders: Int = 12, limitEvents: Int = 60) async throws -> ShopifyChatFeedResponse {
         let url = URL(string: "\(baseURL)/shopify/chat/feed?limit_orders=\(limitOrders)&limit_events=\(limitEvents)")!
         return try await request(URLRequest(url: url))
@@ -102,12 +109,15 @@ class APIClient: NSObject {
     }
 
     func fetchShopifyOrder(orderId: String) async throws -> ShopifyOrderDetail {
-        let url = URL(string: "\(baseURL)/shopify/orders/\(orderId)")!
+        let encodedOrderId = orderId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? orderId
+        let url = try shopifyPathURL("shopify/orders/\(encodedOrderId)")
         return try await request(URLRequest(url: url))
     }
 
-    func fetchShopifyOrderEvents(orderId: String) async throws -> ShopifyOrderEventsResponse {
-        let url = URL(string: "\(baseURL)/shopify/orders/\(orderId)/events")!
+    func fetchShopifyOrderEvents(orderId: String, limit: Int = 30) async throws -> ShopifyOrderEventsResponse {
+        let encodedOrderId = orderId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? orderId
+        let clampedLimit = min(max(1, limit), 100)
+        let url = try shopifyPathURL("shopify/orders/\(encodedOrderId)/events?limit=\(clampedLimit)")
         return try await request(URLRequest(url: url))
     }
 

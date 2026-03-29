@@ -164,6 +164,7 @@ function SummaryCard({
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [orders, setOrders] = useState<ShopifyOrder[]>([]);
+  const [showOrderActivity, setShowOrderActivity] = useState(false);
   const [ordersSearch, setOrdersSearch] = useState("");
   const [ordersSort, setOrdersSort] = useState<"newest" | "oldest" | "amount">("newest");
   const [ordersStatusFilter, setOrdersStatusFilter] = useState("all");
@@ -185,6 +186,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     void loadData();
+
+    const storedPreference = window.localStorage.getItem("web-dashboard-show-order-activity");
+    if (storedPreference === "1") {
+      setShowOrderActivity(true);
+    }
 
     const interval = window.setInterval(() => {
       void loadData(false);
@@ -211,6 +217,18 @@ export default function DashboardPage() {
       window.removeEventListener("network-online", handleAppActive as EventListener);
     };
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("web-dashboard-show-order-activity", showOrderActivity ? "1" : "0");
+    if (!showOrderActivity) {
+      setOrderEvents([]);
+      setOrderEventsError("");
+      return;
+    }
+    if (selectedOrder?.id) {
+      void loadOrderEvents(selectedOrder.id);
+    }
+  }, [showOrderActivity, selectedOrder?.id]);
 
   useEffect(() => {
     if (!selectedOrder?.id) return;
@@ -284,14 +302,16 @@ export default function DashboardPage() {
     }
 
     try {
-      const [detail, eventsResult] = await Promise.all([
-        api<ShopifyOrderDetail>(`/shopify/orders/${orderId}`),
-        loadOrderEvents(orderId),
-      ]);
+      const detail = await api<ShopifyOrderDetail>(`/shopify/orders/${orderId}`);
 
       const previous = selectedOrder;
       setSelectedOrder(detail);
-      setOrderEvents(eventsResult);
+      if (showOrderActivity) {
+        await loadOrderEvents(orderId);
+      } else {
+        setOrderEvents([]);
+        setOrderEventsError("");
+      }
       await loadGelatoStatus(orderId);
 
       if (previous && (previous.fulfillment_status !== detail.fulfillment_status || previous.financial_status !== detail.financial_status)) {
@@ -411,19 +431,16 @@ export default function DashboardPage() {
       {
         title: "Bestandsbasis",
         status: `${data?.files_count || 0} items`,
-        description: "Opslag, recente uploads en systeemcapaciteit blijven zichtbaar zonder naar de files-module te springen.",
         href: "/files",
       },
       {
         title: "Commerce flow",
         status: `${orders.length} orders`,
-        description: "Shopify orders en Gelato-afhandeling zitten in dezelfde operationele laag als systeemstatus.",
         href: "/shopify",
       },
       {
         title: "Integratiebasis",
         status: filteredActivity.length > 0 ? `${filteredActivity.length} events` : "Monitor actief",
-        description: "Gebruik instellingen om globale sync, connectors en updategedrag te beheren vanuit dezelfde workspace.",
         href: "/settings",
       },
     ];
@@ -442,9 +459,6 @@ export default function DashboardPage() {
                 Operationeel overzicht
               </div>
               <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Dashboard</h1>
-              <p className="mt-1.5 text-sm text-muted">
-                Opslag, activiteit, Shopify-orders en Gelato-opvolging op één plek.
-              </p>
             </div>
             <button
               onClick={() => void loadData()}
@@ -469,9 +483,6 @@ export default function DashboardPage() {
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="section-heading">Operationele lanes</h2>
-              <p className="section-subtext">
-                Snelle toegang tot de kernmodules van het platform.
-              </p>
             </div>
             <span className="badge badge-muted">Werkruimtehiërachie</span>
           </div>
@@ -492,7 +503,6 @@ export default function DashboardPage() {
                     <Activity className="h-4 w-4 text-accent" />
                   )}
                 </div>
-                <p className="mt-2 text-sm text-muted">{module.description}</p>
                 <Link href={module.href} className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent transition-colors hover:text-accent/80">
                   Open
                   <ArrowUpRight className="h-3.5 w-3.5" />
@@ -591,7 +601,6 @@ export default function DashboardPage() {
               </div>
               <div>
                 <h3 className="font-semibold">Recente bestanden</h3>
-                <p className="mt-1 text-sm opacity-65">Recent aangemaakte of geüploade bestanden in de cloud.</p>
               </div>
             </div>
             <ul className="mt-5 space-y-3">
@@ -621,7 +630,6 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <h3 className="font-semibold">Activiteitslog</h3>
-                  <p className="mt-1 text-sm opacity-65">Recente systeemacties en operationele gebeurtenissen.</p>
                 </div>
               </div>
             </div>
@@ -666,7 +674,6 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <h3 className="font-semibold">Shopify bestellingen</h3>
-                  <p className="mt-1 text-sm opacity-65">Open bestellingen inline en houd Gelato-opvolging vast in dezelfde operationele context.</p>
                 </div>
               </div>
               <span className="rounded-full bg-card/45 px-3 py-1 text-xs opacity-70">Laatste 10</span>
@@ -737,7 +744,7 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-            <p className="mt-2 text-xs opacity-60">Klik op een bestelling om rechts details en Gelato-status te openen.</p>
+            <p className="mt-2 text-xs opacity-60">Klik op een bestelling voor details.</p>
           </section>
 
           <aside className="section-block xl:sticky xl:top-[96px] xl:h-fit">
@@ -745,7 +752,6 @@ export default function DashboardPage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-45">Detailkaart</p>
                 <h3 className="mt-2 text-lg font-semibold">Orderafhandeling</h3>
-                <p className="mt-1 text-sm opacity-60">Shopify-detail, events en Gelato-opvolging blijven vast naast de orderlijst.</p>
               </div>
               {(selectedOrder || orderDetailError) && (
                 <button onClick={closeOrderDetail} className="rounded-xl border border-border px-3 py-2 text-sm transition hover:bg-card/60">
@@ -760,7 +766,6 @@ export default function DashboardPage() {
             {!orderDetailLoading && !orderDetailError && !selectedOrder && (
               <div className="mt-5 rounded-xl border border-dashed border-border bg-card/25 p-6 text-center">
                 <p className="text-sm font-medium">Selecteer een bestelling</p>
-                <p className="mt-2 text-sm opacity-65">De detailkaart toont hier direct klantinfo, orderlijnen, Shopify-events en Gelato-status.</p>
               </div>
             )}
 
@@ -909,36 +914,56 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="rounded-xl border border-border bg-card/40 p-3">
-                    <div className="mb-2 flex items-center justify-between">
-                      <p className="text-xs opacity-60">Shopify events & orderactiviteit</p>
-                      {selectedOrder?.id && (
-                        <button
-                          onClick={() => void loadOrderEvents(selectedOrder.id)}
-                          disabled={orderEventsLoading}
-                          className="rounded-lg border border-border px-2 py-1 text-xs transition hover:bg-card/70 disabled:opacity-50"
-                        >
-                          {orderEventsLoading ? "Verversen..." : "Gebeurtenissen verversen"}
-                        </button>
-                      )}
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p className="text-xs opacity-60">Orderactiviteit</p>
+                      <label className="inline-flex items-center gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={showOrderActivity}
+                          onChange={(event) => setShowOrderActivity(event.target.checked)}
+                          className="h-4 w-4 rounded border-border bg-transparent"
+                        />
+                        Toon
+                      </label>
                     </div>
-                    {orderEventsError && <p className="text-sm text-red-400">{orderEventsError}</p>}
-                    {!orderEventsError && orderEvents.length === 0 && !orderEventsLoading && (
-                      <p className="text-sm opacity-70">Geen Shopify-gebeurtenissen gevonden voor deze bestelling.</p>
+
+                    {!showOrderActivity && (
+                      <p className="text-sm opacity-70">Verborgen. Zet Toon aan om Shopify-events te laden.</p>
                     )}
-                    {orderEventsLoading && <p className="text-sm opacity-70">Shopify-gebeurtenissen laden...</p>}
-                    {orderEvents.length > 0 && (
-                      <ul className="space-y-2">
-                        {orderEvents.slice(0, 30).map((event) => (
-                          <li key={event.id} className="rounded-lg border border-border/70 bg-card/30 p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <p className="text-xs font-medium uppercase opacity-65">{event.type}</p>
-                              <p className="text-xs opacity-55">{formatDateLabel(event.created_at)}</p>
-                            </div>
-                            <p className="mt-1 text-sm font-medium">{event.author}</p>
-                            <p className="mt-1 text-sm opacity-80">{event.message}</p>
-                          </li>
-                        ))}
-                      </ul>
+
+                    {showOrderActivity && (
+                      <>
+                        {selectedOrder?.id && (
+                          <div className="mb-2 flex justify-end">
+                            <button
+                              onClick={() => void loadOrderEvents(selectedOrder.id)}
+                              disabled={orderEventsLoading}
+                              className="rounded-lg border border-border px-2 py-1 text-xs transition hover:bg-card/70 disabled:opacity-50"
+                            >
+                              {orderEventsLoading ? "Verversen..." : "Verversen"}
+                            </button>
+                          </div>
+                        )}
+                        {orderEventsError && <p className="text-sm text-red-400">{orderEventsError}</p>}
+                        {!orderEventsError && orderEvents.length === 0 && !orderEventsLoading && (
+                          <p className="text-sm opacity-70">Geen events.</p>
+                        )}
+                        {orderEventsLoading && <p className="text-sm opacity-70">Events laden...</p>}
+                        {orderEvents.length > 0 && (
+                          <ul className="space-y-2">
+                            {orderEvents.slice(0, 30).map((event) => (
+                              <li key={event.id} className="rounded-lg border border-border/70 bg-card/30 p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <p className="text-xs font-medium uppercase opacity-65">{event.type}</p>
+                                  <p className="text-xs opacity-55">{formatDateLabel(event.created_at)}</p>
+                                </div>
+                                <p className="mt-1 text-sm font-medium">{event.author}</p>
+                                <p className="mt-1 text-sm opacity-80">{event.message}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </>
                     )}
                   </div>
 

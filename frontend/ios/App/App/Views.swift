@@ -98,14 +98,11 @@ struct DashboardTab: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Cloud Workspace")
                             .font(.largeTitle.bold())
-                        Text("Alles centraal: storage, mail, events en beheer in één native app.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
                     }
 
                     CloudHeroCard(
                         title: "Live overzicht",
-                        subtitle: "\(mailViewModel.messages.count) mails • \(shopifyViewModel.events.count) shopify events",
+                        subtitle: "\(mailViewModel.messages.count) mails • \(shopifyViewModel.events.count) events",
                         badges: [
                             ("Storage", storageSummary),
                             ("Items", "\(fileTotal)"),
@@ -576,8 +573,7 @@ struct ShopifyTab: View {
             if viewModel.orders.isEmpty {
                 ContentUnavailableView(
                     "No Shopify orders",
-                    systemImage: "shippingbox",
-                    description: Text("Connect Shopify and refresh to see recente orders in de native app.")
+                    systemImage: "shippingbox"
                 )
             } else {
                 VStack(alignment: .leading, spacing: 10) {
@@ -598,8 +594,7 @@ struct ShopifyTab: View {
             if viewModel.events.isEmpty {
                 ContentUnavailableView(
                     "No Shopify events",
-                    systemImage: "message",
-                    description: Text("De native eventfeed vult zich zodra Shopify orders en events beschikbaar zijn.")
+                    systemImage: "message"
                 )
             } else {
                 VStack(alignment: .leading, spacing: 10) {
@@ -620,8 +615,7 @@ struct ShopifyTab: View {
             if viewModel.websiteConversations.isEmpty {
                 ContentUnavailableView(
                     "No website chats",
-                    systemImage: "bubble.left.and.bubble.right",
-                    description: Text("Nieuwe storefront chats verschijnen hier als aparte native gesprekken.")
+                    systemImage: "bubble.left.and.bubble.right"
                 )
             } else {
                 VStack(alignment: .leading, spacing: 10) {
@@ -1948,27 +1942,41 @@ struct ShopifyOrderDetailView: View {
     @State private var viewModel = ShopifyViewModel()
     @State private var order: ShopifyOrderDetail?
     @State private var events: [ShopifyChatEvent] = []
-    @State private var isLoading = true
+    @AppStorage("showShopifyOrderActivity") private var showOrderActivity = false
+    @State private var isLoadingOrder = true
+    @State private var isLoadingEvents = false
     @State private var errorMessage: String?
 
     @MainActor
-    private func load() async {
-        isLoading = true
+    private func loadOrder() async {
+        isLoadingOrder = true
         errorMessage = nil
         do {
-            async let orderTask = viewModel.fetchOrder(orderId: orderId)
-            async let eventsTask = viewModel.fetchOrderEvents(orderId: orderId)
-            order = try await orderTask
-            events = try await eventsTask
+            order = try await viewModel.fetchOrder(orderId: orderId)
         } catch {
             errorMessage = error.localizedDescription
         }
-        isLoading = false
+        isLoadingOrder = false
+    }
+
+    @MainActor
+    private func loadEvents() async {
+        isLoadingEvents = true
+        defer { isLoadingEvents = false }
+
+        do {
+            events = try await viewModel.fetchOrderEvents(orderId: orderId, limit: 30)
+        } catch {
+            if errorMessage == nil {
+                errorMessage = error.localizedDescription
+            }
+            events = []
+        }
     }
 
     var body: some View {
         Group {
-            if isLoading {
+            if isLoadingOrder {
                 ProgressView("Loading order...")
             } else if let order {
                 List {
@@ -2003,10 +2011,21 @@ struct ShopifyOrderDetailView: View {
                         }
                     }
 
-                    if !events.isEmpty {
-                        Section("Events") {
-                            ForEach(events) { event in
-                                ShopifyEventRow(event: event)
+                    Section("Order activity") {
+                        Toggle("Toon activiteit", isOn: $showOrderActivity)
+                            .toggleStyle(.switch)
+
+                        if showOrderActivity {
+                            if isLoadingEvents {
+                                ProgressView("Loading activity...")
+                            } else if !events.isEmpty {
+                                ForEach(events) { event in
+                                    ShopifyEventRow(event: event)
+                                }
+                            } else {
+                                Text("Geen activiteit beschikbaar")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -2025,7 +2044,13 @@ struct ShopifyOrderDetailView: View {
             }
         }
         .task {
-            await load()
+            await loadOrder()
+        }
+        .onChange(of: showOrderActivity) { _, enabled in
+            guard enabled, events.isEmpty, !isLoadingEvents else { return }
+            Task {
+                await loadEvents()
+            }
         }
     }
 }

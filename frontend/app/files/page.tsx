@@ -218,12 +218,11 @@ function getFileSurface(file: FileRow): string {
   return "bg-accent/12 text-accent";
 }
 
-function PreviewPlaceholder({ title, description }: { title: string; description: string }) {
+function PreviewPlaceholder({ title }: { title: string }) {
   return (
     <div className="flex min-h-[260px] items-center justify-center rounded-[1.5rem] border border-dashed border-border bg-card/25 p-6 text-center">
       <div>
         <p className="text-sm font-medium">{title}</p>
-        <p className="mt-2 text-sm opacity-65">{description}</p>
       </div>
     </div>
   );
@@ -502,7 +501,7 @@ export default function FilesPage() {
                 Cloud drive
               </p>
               <h1 className="mt-1.5 text-2xl font-semibold sm:text-3xl">Bestanden</h1>
-              <p className="mt-1 text-sm opacity-70">Pad: {currentPath}</p>
+              <p className="mt-1 text-sm opacity-70 font-mono">{currentPath}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button onClick={() => void loadFiles()} className="btn-primary">
@@ -652,7 +651,7 @@ export default function FilesPage() {
             <div className="mb-5 flex items-center justify-between gap-3 border-b border-border/60 pb-5">
               <div>
                 <h2 className="text-lg font-semibold">{currentFolder ? currentFolder.name : "Mijn bestanden"}</h2>
-                <p className="mt-1 text-sm opacity-60">{filteredFiles.length} bestanden zichtbaar, {visibleFolders.length} mappen in deze laag.</p>
+                <p className="mt-1 text-sm opacity-60">{filteredFiles.length} bestanden · {visibleFolders.length} mappen</p>
               </div>
               {currentFolder && (
                 <button onClick={navigateUp} className="rounded-2xl border border-border px-3 py-2 text-sm transition hover:bg-card/70">
@@ -802,7 +801,6 @@ export default function FilesPage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-45">Detailkaart</p>
                 <h2 className="mt-2 text-lg font-semibold">Open bestand</h2>
-                <p className="mt-1 text-sm opacity-60">Eerste preview, metadata en acties blijven vast in beeld.</p>
               </div>
               {previewFile && (
                 <button onClick={closePreview} className="rounded-xl border border-border p-2 transition hover:bg-card/60" aria-label="Preview sluiten">
@@ -815,7 +813,6 @@ export default function FilesPage() {
               <div className="mt-5 space-y-4">
                 <PreviewPlaceholder
                   title="Selecteer een bestand"
-                  description="Klik links op een bestand om het meteen te openen in deze vaste previewkaart. Afbeeldingen, video, audio, PDF, tekst en Office blijven ondersteund."
                 />
                 <div className="rounded-[1.5rem] border border-border bg-card/25 p-4">
                   <p className="text-sm font-medium">Ondersteunde web-preview</p>
@@ -904,11 +901,8 @@ export default function FilesPage() {
 
                   {!previewLoading && !previewError && previewOfficeUrl && isOfficeFile(previewFile) && (
                     <div className="space-y-3">
-                      <p className="text-xs opacity-70">
-                        Office-preview gebruikt een externe kijker. Als je een fout ziet, controleer of je server publiek bereikbaar is.
-                      </p>
                       {officePreviewFailed && (
-                        <p className="text-sm text-red-300">Office-kijker kon niet laden. Gebruik download als fallback.</p>
+                        <p className="text-sm text-red-300">Office-kijker kon niet laden.</p>
                       )}
                       <iframe
                         src={previewOfficeUrl}
@@ -926,7 +920,6 @@ export default function FilesPage() {
                   {!previewLoading && !previewError && !previewText && previewUrl && selectedPreviewKind === "other" && (
                     <PreviewPlaceholder
                       title="Beperkte web-preview"
-                      description="Dit bestandstype heeft nog geen rijke inline viewer. Gebruik download om lokaal te openen."
                     />
                   )}
                 </div>
@@ -1009,11 +1002,8 @@ export default function FilesPage() {
 
                 {!previewLoading && !previewError && previewOfficeUrl && isOfficeFile(previewFile) && (
                   <div className="space-y-3">
-                    <p className="text-xs opacity-70">
-                      Office-preview gebruikt een externe kijker. Als je een fout ziet, controleer of je server publiek bereikbaar is.
-                    </p>
                     {officePreviewFailed && (
-                      <p className="text-sm text-red-300">Office-kijker kon niet laden. Gebruik download als fallback.</p>
+                      <p className="text-sm text-red-300">Office-kijker kon niet laden.</p>
                     )}
                     <iframe
                       src={previewOfficeUrl}
@@ -1031,7 +1021,6 @@ export default function FilesPage() {
                 {!previewLoading && !previewError && !previewText && previewUrl && selectedPreviewKind === "other" && (
                   <PreviewPlaceholder
                     title="Beperkte web-preview"
-                    description="Dit bestandstype heeft nog geen rijke inline viewer. Gebruik download om lokaal te openen."
                   />
                 )}
               </div>

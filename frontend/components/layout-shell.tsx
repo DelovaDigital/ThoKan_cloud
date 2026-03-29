@@ -14,7 +14,6 @@ import {
   MessageSquareText,
   Settings,
   Shield,
-  Search,
   ChevronLeft,
   ChevronRight,
   Monitor,
@@ -54,21 +53,12 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const [currentUserName,   setCurrentUserName]   = useState("Workspace");
   const [currentUserEmail,  setCurrentUserEmail]  = useState("");
   const [chatUnreadCount,   setChatUnreadCount]   = useState(0);
-  const [moduleQuery,       setModuleQuery]       = useState("");
   const [sidebarCollapsed,  setSidebarCollapsed]  = useState(false);
-  const [searchFocused,     setSearchFocused]     = useState(false);
 
   const latestIncomingByUserRef          = useRef<Record<string, string>>({});
   const currentUserIdRef                 = useRef("");
   const chatNotificationsInitializedRef  = useRef(false);
-  const moduleSearchRef                  = useRef<HTMLInputElement | null>(null);
   const activeItem = items.find((item) => pathname.startsWith(item.href)) ?? items[0];
-
-  const filteredItems = useMemo(() => {
-    const q = moduleQuery.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((item) => item.label.toLowerCase().includes(q));
-  }, [moduleQuery]);
 
   /* ── Restore persisted state ─────────────────────────────── */
   useEffect(() => {
@@ -192,19 +182,6 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     };
   }, [authChecked, pathname]);
 
-  /* ── Keyboard shortcut (⌘K) ──────────────────────────────── */
-  useEffect(() => {
-    function handleQuickSearch(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        moduleSearchRef.current?.focus();
-        moduleSearchRef.current?.select();
-      }
-    }
-    window.addEventListener("keydown", handleQuickSearch);
-    return () => window.removeEventListener("keydown", handleQuickSearch);
-  }, []);
-
   function toggleSidebar() {
     setSidebarCollapsed((prev) => {
       const next = !prev;
@@ -311,7 +288,6 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold leading-tight">ThoKan</p>
-                  <p className="truncate text-[11px] text-muted">Cloud Command</p>
                 </div>
               </motion.div>
             ) : (
@@ -337,39 +313,10 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {/* Search */}
-        <AnimatePresence>
-          {!sidebarCollapsed && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2 }}
-              className="border-b border-border px-3 py-2.5"
-            >
-              <div className={cn(
-                "flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors",
-                searchFocused ? "border-accent ring-2 ring-accent/20" : "border-border",
-              )}>
-                <Search className="h-3.5 w-3.5 shrink-0 text-muted" />
-                <input
-                  ref={moduleSearchRef}
-                  value={moduleQuery}
-                  onChange={(e) => setModuleQuery(e.target.value)}
-                  onFocus={() => setSearchFocused(true)}
-                  onBlur={() => setSearchFocused(false)}
-                  placeholder="Module zoeken… (⌘K)"
-                  className="w-full bg-transparent text-xs text-fg placeholder:text-muted focus:outline-none"
-                />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-3 thin-scrollbar">
           <div className={cn("space-y-0.5", sidebarCollapsed ? "px-2" : "px-2")}>
-            {filteredItems.map((item) => {
+            {items.map((item) => {
               const active = pathname.startsWith(item.href);
               const Icon   = item.icon;
               return (
@@ -416,9 +363,6 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
-            {filteredItems.length === 0 && !sidebarCollapsed && (
-              <p className="px-3 py-2 text-xs text-muted">Geen modules gevonden.</p>
-            )}
           </div>
         </nav>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -11,8 +11,6 @@ import {
   PackageCheck,
   RefreshCw,
   Server,
-  Sparkles,
-  Workflow,
 } from "lucide-react";
 import { LayoutShell } from "@/components/layout-shell";
 import { PageTransition } from "@/components/page-transition";
@@ -74,12 +72,10 @@ function formatDate(value?: string): string {
 function StatCard({
   label,
   value,
-  hint,
   icon: Icon,
 }: {
   label: string;
   value: string;
-  hint: string;
   icon: React.ElementType;
 }) {
   return (
@@ -94,7 +90,6 @@ function StatCard({
         <Icon className="h-4 w-4 text-accent" />
       </div>
       <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
-      <p className="mt-1 text-xs text-muted">{hint}</p>
     </motion.div>
   );
 }
@@ -174,28 +169,14 @@ export default function WorkspacePage() {
   }
 
   const usedStorage = dashboard?.used_bytes ?? 0;
-  const freeStorage = useMemo(() => {
-    if (!dashboard) return 0;
-    return Math.max(0, dashboard.system_info.storage_free_gb);
-  }, [dashboard]);
-
   return (
     <LayoutShell>
       <PageTransition>
         <div className="space-y-4 sm:space-y-5">
-          <section className="hero-gradient section-block overflow-hidden">
-            <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <section className="section-block overflow-hidden">
+            <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <p className="inline-flex items-center gap-2 rounded-full bg-white/70 px-2.5 py-1 text-xs font-medium uppercase tracking-[0.2em] text-accent">
-                  <Workflow className="h-3.5 w-3.5" />
-                  Command Center
-                </p>
-                <h1 className="mt-3 text-3xl font-semibold leading-tight sm:text-4xl">
-                  Moderne cloudwerkruimte voor files, mail en orders.
-                </h1>
-                <p className="mt-2 max-w-3xl text-sm text-muted sm:text-base">
-                  Alle operationele signalen zitten in een centrale cockpit met realtime refresh voor desktop en iOS.
-                </p>
+                <h1 className="text-2xl font-semibold leading-tight sm:text-3xl">Workspace</h1>
               </div>
 
               <button
@@ -219,25 +200,21 @@ export default function WorkspacePage() {
             <StatCard
               label="Bestanden"
               value={loading ? "..." : `${dashboard?.files_count ?? 0}`}
-              hint="Totaal aantal bestanden"
               icon={Boxes}
             />
             <StatCard
               label="Opslag gebruikt"
               value={loading ? "..." : formatBytes(usedStorage)}
-              hint={`Vrij: ${freeStorage.toFixed(2)} GB`}
               icon={HardDrive}
             />
             <StatCard
               label="Inbox"
               value={loading ? "..." : `${mailTotal}`}
-              hint="Beschikbare mails"
               icon={Mail}
             />
             <StatCard
               label="Orders"
               value={loading ? "..." : `${orders.length}`}
-              hint="Laatste Shopify bestellingen"
               icon={PackageCheck}
             />
           </section>
@@ -261,7 +238,7 @@ export default function WorkspacePage() {
                   </div>
                 ))}
                 {!loading && (dashboard?.recent_files || []).length === 0 && (
-                  <p className="text-sm text-muted">Nog geen bestanden gevonden.</p>
+                  <p className="text-sm text-muted">Geen bestanden.</p>
                 )}
               </div>
             </article>
@@ -282,7 +259,7 @@ export default function WorkspacePage() {
                   </div>
                 ))}
                 {!loading && mailMessages.length === 0 && (
-                  <p className="text-sm text-muted">Geen inboxdata of mailconfig ontbreekt.</p>
+                  <p className="text-sm text-muted">Geen berichten.</p>
                 )}
               </div>
             </article>
@@ -308,7 +285,7 @@ export default function WorkspacePage() {
                   </div>
                 ))}
                 {!loading && orders.length === 0 && (
-                  <p className="text-sm text-muted">Geen orderdata of Shopifyconfig ontbreekt.</p>
+                  <p className="text-sm text-muted">Geen orders.</p>
                 )}
               </div>
             </article>
@@ -320,31 +297,23 @@ export default function WorkspacePage() {
                 <Boxes className="h-4 w-4 text-accent" />
                 Files
               </p>
-              <h3 className="mt-2 text-lg font-semibold">Bestandsomgeving</h3>
-              <p className="mt-1 text-sm text-muted">Upload, versies en mappen in een gestroomlijnde workflow.</p>
+              <h3 className="mt-2 text-lg font-semibold">Bestanden</h3>
             </Link>
             <Link href="/mail" className="section-block-hover">
               <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-muted">
                 <Mail className="h-4 w-4 text-accent" />
                 Mail
               </p>
-              <h3 className="mt-2 text-lg font-semibold">Communicatiehub</h3>
-              <p className="mt-1 text-sm text-muted">Inbox, antwoorden en opvolging op één plek.</p>
+              <h3 className="mt-2 text-lg font-semibold">Inbox</h3>
             </Link>
             <Link href="/shopify" className="section-block-hover">
               <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-muted">
                 <Server className="h-4 w-4 text-accent" />
                 Orders
               </p>
-              <h3 className="mt-2 text-lg font-semibold">Order cockpit</h3>
-              <p className="mt-1 text-sm text-muted">Volg fulfilment en betalingen in realtime.</p>
+              <h3 className="mt-2 text-lg font-semibold">Orderbeheer</h3>
             </Link>
           </section>
-
-          <div className="flex items-center justify-end gap-2 text-xs text-muted">
-            <Sparkles className="h-4 w-4 text-accent" />
-            Workspace synchroniseert elke {Math.round(REFRESH_MS / 1000)} seconden.
-          </div>
         </div>
       </PageTransition>
     </LayoutShell>

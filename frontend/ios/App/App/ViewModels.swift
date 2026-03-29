@@ -206,8 +206,8 @@ class ShopifyViewModel {
         try await apiClient.fetchShopifyOrder(orderId: orderId)
     }
 
-    func fetchOrderEvents(orderId: String) async throws -> [ShopifyChatEvent] {
-        let response = try await apiClient.fetchShopifyOrderEvents(orderId: orderId)
+    func fetchOrderEvents(orderId: String, limit: Int = 30) async throws -> [ShopifyChatEvent] {
+        let response = try await apiClient.fetchShopifyOrderEvents(orderId: orderId, limit: limit)
         return response.events
     }
 

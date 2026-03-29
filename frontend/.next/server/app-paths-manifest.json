@@ -1,15 +1,15 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
-  "/chat/page": "app/chat/page.js",
-  "/admin/page": "app/admin/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
-  "/login/page": "app/login/page.js",
-  "/register/page": "app/register/page.js",
   "/files/page": "app/files/page.js",
-  "/page": "app/page.js",
+  "/admin/page": "app/admin/page.js",
+  "/shopify/page": "app/shopify/page.js",
+  "/chat/page": "app/chat/page.js",
+  "/settings/page": "app/settings/page.js",
   "/mail/page": "app/mail/page.js",
   "/restarting/page": "app/restarting/page.js",
-  "/settings/page": "app/settings/page.js",
-  "/shopify/page": "app/shopify/page.js",
-  "/workspace/page": "app/workspace/page.js"
+  "/page": "app/page.js",
+  "/workspace/page": "app/workspace/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/login/page": "app/login/page.js",
+  "/register/page": "app/register/page.js"
 }
