@@ -7,7 +7,7 @@
     "prebuild": "if [ -f ../scripts/sync_version.py ] && [ -f ../VERSION ]; then python3 ../scripts/sync_version.py; else echo 'Skipping version sync (VERSION/scripts not available in this build context)'; fi",
     "build": "next build",
     "start": "next start -p 3000",
-    "lint": "next lint",
+    "lint": "eslint .",
     "capacitor:sync": "cap sync",
     "capacitor:open:ios": "cap open ios",
     "capacitor:open:android": "cap open android",
@@ -38,11 +38,14 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "autoprefixer": "^10.5.4",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.1",
     "postcss": "^8.5.26",
     "tailwindcss": "^3.4.19",
-    "typescript": "^7.0.2"
+    "typescript": "^6"
   },
   "allowScripts": {
-    "sharp@0.34.5": true
+    "sharp@0.34.5": true,
+    "unrs-resolver@1.12.2": true
   }
 }
